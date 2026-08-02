@@ -1,0 +1,43 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug: Trapigo Docker Compose",
+            "type": "go",
+            "request": "attach",
+            "mode": "remote",
+            "port": 40000,
+            "host": "127.0.0.1",
+            "substitutePath": [
+                {
+                    "from": "${workspaceFolder}/trapigo",
+                    "to": "/app"
+                }
+            ]
+        },
+        {
+            "name": "Debug: CRUDAPI Docker Compose",
+            "type": "go",
+            "request": "attach",
+            "mode": "remote",
+            "port": 40001,
+            "host": "127.0.0.1",
+            "substitutePath": [
+                {
+                    "from": "${workspaceFolder}/crudapi",
+                    "to": "/app"
+                }
+            ]
+        },
+        {
+            "type": "dockerfile",
+            "request": "launch",
+            "name": "Docker: Build",
+            "dockerfile": "Dockerfile",
+            "contextPath": "${workspaceFolder}"
+        }
+    ]
+}
