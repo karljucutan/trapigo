@@ -1,3 +1,3 @@
 # TrapiGo
 
-Trapiko built on Go. Inspired by Traefik.
+Trapiko: Built in Go. Inspired by Traefik.
