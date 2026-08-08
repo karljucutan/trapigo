@@ -1,0 +1,20 @@
+http:
+  routers:
+    users-router:
+      path-prefix: /api/v1/users
+      service: users-service
+
+    orders-router:
+      path-prefix: /api/v1/orders
+      service: orders-service
+
+  services:
+    users-service:
+      load-balancer:
+        servers:
+          - url: http://app-one:8080
+
+    orders-service:
+      load-balancer:
+        servers:
+          - url: http://app-two:8080

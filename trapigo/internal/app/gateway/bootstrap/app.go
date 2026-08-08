@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
 )
 
@@ -22,38 +23,54 @@ type App struct {
 	AdminServer   *http.Server
 }
 
+type routeProxy struct {
+	prefix string
+	proxy  *httputil.ReverseProxy
+}
+
 func CreateApp() (*App, error) {
 	// 1. Setup backend proxy
-	// Sample but make this dynamic later on. This is just a placeholder for now.
-	appOneURL, err := url.Parse("http://app-one:8080")
+	trapigoYamlPath := configuration.GetEnv("trapigo-gateway", "configs/trapigo-gateway.yaml")
+	cfg, err := config.LoadConfig(trapigoYamlPath)
 	if err != nil {
-		return nil, fmt.Errorf("Invalid app-one URL: %v", err)
+		log.Fatal(err)
 	}
 
-	// 2. Instantiate an independent native proxy engine for each service
-	proxyAppOne := httputil.NewSingleHostReverseProxy(appOneURL)
+	var routeProxies []routeProxy
 
-	// 3. Define the main API Gateway Router (Port 80)
-	gatewayMux := http.NewServeMux()
-	gatewayMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-
-		// Traefik-Style Rule 1: Route /users paths to App One
-		if strings.HasPrefix(r.URL.Path, "/api/v1/users") {
-			log.Printf("[Trapigo] Proxying request %s to app-one", r.URL.Path)
-			proxyAppOne.ServeHTTP(w, r)
-			return
+	// Instantiate a reverse proxy for each router and its associated service's servers
+	for routerName, router := range cfg.HTTP.Routers {
+		service, ok := cfg.HTTP.Services[router.Service]
+		if !ok || len(service.LoadBalancer.Servers) == 0 {
+			return nil, fmt.Errorf("service %q for router %q not found", router.Service, routerName)
 		}
 
-		// Example Traefik-Style Rule 2: Route /orders paths to App Two
-		// if strings.HasPrefix(r.URL.Path, "/api/v1/orders") {
-		// 	log.Printf("[Trapigo] Proxying request %s to app-two", r.URL.Path)
-		// 	proxyAppTwo.ServeHTTP(w, r)
-		// 	return
-		// }
+		// Support for multiple servers in the load balancer for a service
+		for _, server := range service.LoadBalancer.Servers {
+			upstreamURL, err := url.Parse(server.URL)
+			if err != nil {
+				return nil, fmt.Errorf("invalid upstream URL %q for router %q: %w", server.URL, routerName, err)
+			}
 
-		// Fallback for unmatched endpoints
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprintln(w, "Trapigo Gateway: Service router matching rules failed.")
+			routeProxies = append(routeProxies, routeProxy{
+				prefix: router.PathPrefix,
+				proxy:  httputil.NewSingleHostReverseProxy(upstreamURL),
+			})
+		}
+	}
+
+	// 2. Define the main API Gateway Router (Port 80)
+	gatewayMux := http.NewServeMux()
+	gatewayMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		for _, rp := range routeProxies {
+			if strings.HasPrefix(r.URL.Path, rp.prefix) {
+				log.Printf("[Trapigo] Proxying request %s to %s", r.URL.Path, rp.prefix)
+				rp.proxy.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		http.NotFound(w, r)
 	})
 
 	gatewayServer := &http.Server{
