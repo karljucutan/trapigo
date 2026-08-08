@@ -30,7 +30,7 @@ type routeProxy struct {
 
 func CreateApp() (*App, error) {
 	// 1. Setup backend proxy
-	trapigoYamlPath := configuration.GetEnv("trapigo-gateway", "configs/trapigo-gateway.yaml")
+	trapigoYamlPath := configuration.GetEnv("TRAPIGO_GATEWAY_CONFIG", "configs/trapigo-gateway.yaml")
 	cfg, err := config.LoadConfig(trapigoYamlPath)
 	if err != nil {
 		log.Fatal(err)
