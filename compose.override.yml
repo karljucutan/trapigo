@@ -1,6 +1,7 @@
 services:
   trapigo:
     build:
+    # TODO: check if should add compose.dev.yml for DEV overrides like target: dev, and security_opt: seccomp:unconfined, etc.
       target: dev # Overrides the target to use the Delve stage
     ports:
       - "80:80"        # Main gateway entrypoint (http://localhost/)
