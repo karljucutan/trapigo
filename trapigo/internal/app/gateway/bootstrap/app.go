@@ -24,8 +24,10 @@ type App struct {
 }
 
 type routeProxy struct {
-	prefix string
-	proxy  *httputil.ReverseProxy
+	prefix      string
+	service     string
+	upstreamURL string
+	proxy       *httputil.ReverseProxy
 }
 
 func CreateApp() (*App, error) {
@@ -53,18 +55,20 @@ func CreateApp() (*App, error) {
 			}
 
 			routeProxies = append(routeProxies, routeProxy{
-				prefix: router.PathPrefix,
-				proxy:  httputil.NewSingleHostReverseProxy(upstreamURL),
+				prefix:      router.PathPrefix,
+				service:     router.Service,
+				upstreamURL: server.URL,
+				proxy:       httputil.NewSingleHostReverseProxy(upstreamURL),
 			})
 		}
 	}
 
-	// 2. Define the main API Gateway Router (Port 80)
+	// 2. Define the main API Gateway Router (Port 80) and HTTP request multiplexer
 	gatewayMux := http.NewServeMux()
 	gatewayMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		for _, rp := range routeProxies {
 			if strings.HasPrefix(r.URL.Path, rp.prefix) {
-				log.Printf("[Trapigo] Proxying request %s to %s", r.URL.Path, rp.prefix)
+				log.Printf("[Trapigo] Proxying request %s to service %s via %s", r.URL.Path, rp.service, rp.upstreamURL)
 				rp.proxy.ServeHTTP(w, r)
 				return
 			}

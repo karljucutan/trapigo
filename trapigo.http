@@ -1,0 +1,14 @@
+@baseUrl = http://localhost
+@adminUrl = http://localhost:8080
+
+### Gateway: users route
+GET {{baseUrl}}/api/v1/users
+Accept: application/json
+
+### Gateway: orders route
+GET {{baseUrl}}/api/v1/orders
+Accept: application/json
+
+### Admin: health check
+GET {{adminUrl}}/health
+Accept: application/json
