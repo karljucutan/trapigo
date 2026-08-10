@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/karljucutan/trapigo/trapigo/internal/features/core/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
 )
@@ -24,14 +25,11 @@ type App struct {
 }
 
 type routeProxy struct {
-	prefix      string
-	service     string
 	upstreamURL string
 	proxy       *httputil.ReverseProxy
 }
 
 func CreateApp() (*App, error) {
-	// 1. Setup backend proxy
 	trapigoYamlPath := configuration.GetEnv("TRAPIGO_GATEWAY_CONFIG", "configs/trapigo-gateway.yaml")
 	cfg, err := config.LoadConfig(trapigoYamlPath)
 	if err != nil {
@@ -39,42 +37,79 @@ func CreateApp() (*App, error) {
 	}
 
 	var routeProxies []routeProxy
+	loadBalancer := domain.NewLoadBalancer()
 
-	// Instantiate a reverse proxy for each router and its associated service's servers
 	for routerName, router := range cfg.HTTP.Routers {
 		service, ok := cfg.HTTP.Services[router.Service]
 		if !ok || len(service.LoadBalancer.Servers) == 0 {
 			return nil, fmt.Errorf("service %q for router %q not found", router.Service, routerName)
 		}
 
-		// Support for multiple servers in the load balancer for a service
+		loadBalancer.AddRouter(domain.NewRouter(
+			router.PathPrefix,
+			router.Service,
+			domain.NewBackendPool(),
+		))
+
 		for _, server := range service.LoadBalancer.Servers {
 			upstreamURL, err := url.Parse(server.URL)
 			if err != nil {
 				return nil, fmt.Errorf("invalid upstream URL %q for router %q: %w", server.URL, routerName, err)
 			}
 
+			for _, lbRouter := range loadBalancer.Routers {
+				if lbRouter.ServiceName == router.Service {
+					lbRouter.BackendPool.Add(domain.NewBackend(server.URL, upstreamURL))
+					break
+				}
+			}
+
 			routeProxies = append(routeProxies, routeProxy{
-				prefix:      router.PathPrefix,
-				service:     router.Service,
 				upstreamURL: server.URL,
 				proxy:       httputil.NewSingleHostReverseProxy(upstreamURL),
 			})
 		}
 	}
 
-	// 2. Define the main API Gateway Router (Port 80) and HTTP request multiplexer
 	gatewayMux := http.NewServeMux()
-	gatewayMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		for _, rp := range routeProxies {
-			if strings.HasPrefix(r.URL.Path, rp.prefix) {
-				log.Printf("[Trapigo] Proxying request %s to service %s via %s", r.URL.Path, rp.service, rp.upstreamURL)
-				rp.proxy.ServeHTTP(w, r)
-				return
+	gatewayMux.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
+		var matchedRoute *domain.Router
+		for _, route := range loadBalancer.Routers {
+			if strings.HasPrefix(req.URL.Path, route.PathPrefix) {
+				matchedRoute = route
+				break
 			}
 		}
 
-		http.NotFound(w, r)
+		if matchedRoute == nil {
+			http.NotFound(rw, req)
+			return
+		}
+
+		backend := matchedRoute.BackendPool.RoundRobinAtomic()
+		if backend == nil {
+			log.Printf("[Trapigo] No available backends for request %s to service %s", req.URL.Path, matchedRoute.ServiceName)
+			http.Error(rw, "No available backends", http.StatusServiceUnavailable)
+			return
+		}
+
+		var matchedProxy routeProxy
+		for _, rp := range routeProxies {
+			if rp.upstreamURL == backend.Id {
+				matchedProxy = rp
+				break
+			}
+		}
+
+		if matchedProxy.proxy == nil {
+			log.Printf("[Trapigo] No proxy configured for backend %s while serving request %s to service %s", backend.Id, req.URL.Path, matchedRoute.ServiceName)
+			http.Error(rw, "No available backends", http.StatusServiceUnavailable)
+			return
+		}
+
+		log.Printf("[Trapigo] Proxying request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
+		matchedProxy.proxy.ServeHTTP(rw, req)
+		log.Printf("[Trapigo] Served request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
 	})
 
 	gatewayServer := &http.Server{
@@ -86,7 +121,7 @@ func CreateApp() (*App, error) {
 		IdleTimeout:       configuration.GetEnvDuration("IDLE_TIMEOUT", 180, time.Second),
 	}
 
-	// 3. Admin & Health Check Router (Private/Internal - Port 8080)
+	// Admin & Health Check Router (Private/Internal - Port 8080)
 	adminMux := http.NewServeMux()
 	adminMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -109,7 +144,7 @@ func CreateApp() (*App, error) {
 }
 
 func (a *App) Run() {
-	// 4. Start BOTH servers concurrently
+	// Start BOTH servers concurrently
 	// Run the servers in a goroutine so it doesn't block main
 	// Fire off the Gateway Server
 	go func() {
@@ -126,7 +161,7 @@ func (a *App) Run() {
 		}
 	}()
 
-	// 5. Wait for an interrupt signal (Ctrl+C or kill command)
+	// Wait for an interrupt signal (Ctrl+C or kill command)
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
