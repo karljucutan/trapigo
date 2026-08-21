@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -36,7 +35,8 @@ func CreateApp() (*App, error) {
 	trapigoYamlPath := configuration.GetEnv("TRAPIGO_GATEWAY_CONFIG", "configs/trapigo-gateway.yaml")
 	cfg, err := config.LoadConfig(trapigoYamlPath)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	var routeProxies []routeProxy
@@ -91,7 +91,10 @@ func CreateApp() (*App, error) {
 
 		backend := matchedRoute.BackendPool.RoundRobinAtomic()
 		if backend == nil {
-			log.Printf("[Trapigo] No available backends for request %s to service %s", req.URL.Path, matchedRoute.ServiceName)
+			slog.Warn("no available backends",
+				"path", req.URL.Path,
+				"service", matchedRoute.ServiceName,
+			)
 			http.Error(rw, "No available backends", http.StatusServiceUnavailable)
 			return
 		}
@@ -105,21 +108,33 @@ func CreateApp() (*App, error) {
 		}
 
 		if matchedProxy.proxy == nil {
-			log.Printf("[Trapigo] No proxy configured for backend %s while serving request %s to service %s", backend.Id, req.URL.Path, matchedRoute.ServiceName)
+			slog.Warn("no proxy configured",
+				"backend", backend.Id,
+				"path", req.URL.Path,
+				"service", matchedRoute.ServiceName,
+			)
 			http.Error(rw, "No available backends", http.StatusServiceUnavailable)
 			return
 		}
 
-		log.Printf("[Trapigo] Proxying request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
+		slog.Info("proxying request",
+			"path", req.URL.Path,
+			"service", matchedRoute.ServiceName,
+			"backend", backend.Id,
+		)
 		matchedProxy.proxy.ServeHTTP(rw, req)
-		log.Printf("[Trapigo] Served request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
+		slog.Info("served request",
+			"path", req.URL.Path,
+			"service", matchedRoute.ServiceName,
+			"backend", backend.Id,
+		)
 
 		// TODO: Add basic reverse proxy ret
 		// [ Incoming Client Request ]
 		//            │
 		//            ▼
 		// ┌─────────────────────────────────────────────────────────┐
-		// │                 TRAPIGO ENGINE (Port 3000)              │
+		// │                 TRAPIGO ENGINE (Port 80)              │
 		// ├─────────────────────────────────────────────────────────┤
 		// │ 1. LOGGING MIDDLEWARE                                   │
 		// │    - Starts a high-resolution sub-millisecond timer.    │
@@ -166,10 +181,9 @@ func CreateApp() (*App, error) {
 	}
 
 	return &App{
-			GatewayServer: gatewayServer,
-			AdminServer:   adminServer,
-		},
-		nil
+		GatewayServer: gatewayServer,
+		AdminServer:   adminServer,
+	}, nil
 }
 
 func (a *App) Run() {
@@ -177,16 +191,16 @@ func (a *App) Run() {
 	// Run the servers in a goroutine so it doesn't block main
 	// Fire off the Gateway Server
 	go func() {
-		log.Printf("Gateway starting on %s", a.GatewayServer.Addr)
+		slog.Info("gateway starting", "addr", a.GatewayServer.Addr)
 		if err := a.GatewayServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Gateway error: %v", err)
+			slog.Error("gateway error", "error", err)
 		}
 	}()
 	// Fire off the Admin API/Health Server
 	go func() {
-		log.Printf("Admin API/Health server starting on %s", a.AdminServer.Addr)
+		slog.Info("admin api server starting", "addr", a.AdminServer.Addr)
 		if err := a.AdminServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Admin API/Health server error: %v", err)
+			slog.Error("admin api server error", "error", err)
 		}
 	}()
 
@@ -195,20 +209,20 @@ func (a *App) Run() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down servers gracefully...")
+	slog.Info("shutting down servers gracefully")
 
 	// Allow existing requests 5 seconds to finish processing
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := a.GatewayServer.Shutdown(ctx); err != nil {
-		log.Printf("Gateway forced to shutdown: %v", err)
+		slog.Warn("gateway forced to shutdown", "error", err)
 	}
 	if err := a.AdminServer.Shutdown(ctx); err != nil {
-		log.Printf("Admin forced to shutdown: %v", err)
+		slog.Warn("admin forced to shutdown", "error", err)
 	}
 
-	log.Println("Servers stopped cleanly.")
+	slog.Info("servers stopped cleanly")
 }
 
 func setDefaultLogger() {
