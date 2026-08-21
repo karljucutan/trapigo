@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/core/domain"
+	middleware "github.com/karljucutan/trapigo/trapigo/internal/features/middleware/transporthttp"
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
 )
@@ -30,6 +32,7 @@ type routeProxy struct {
 }
 
 func CreateApp() (*App, error) {
+	setDefaultLogger()
 	trapigoYamlPath := configuration.GetEnv("TRAPIGO_GATEWAY_CONFIG", "configs/trapigo-gateway.yaml")
 	cfg, err := config.LoadConfig(trapigoYamlPath)
 	if err != nil {
@@ -72,7 +75,7 @@ func CreateApp() (*App, error) {
 	}
 
 	gatewayMux := http.NewServeMux()
-	gatewayMux.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
+	gatewayHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		var matchedRoute *domain.Router
 		for _, route := range loadBalancer.Routers {
 			if strings.HasPrefix(req.URL.Path, route.PathPrefix) {
@@ -110,7 +113,33 @@ func CreateApp() (*App, error) {
 		log.Printf("[Trapigo] Proxying request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
 		matchedProxy.proxy.ServeHTTP(rw, req)
 		log.Printf("[Trapigo] Served request %s to service %s via %s", req.URL.Path, matchedRoute.ServiceName, backend.Id)
+
+		// TODO: Add basic reverse proxy ret
+		// [ Incoming Client Request ]
+		//            │
+		//            ▼
+		// ┌─────────────────────────────────────────────────────────┐
+		// │                 TRAPIGO ENGINE (Port 3000)              │
+		// ├─────────────────────────────────────────────────────────┤
+		// │ 1. LOGGING MIDDLEWARE                                   │
+		// │    - Starts a high-resolution sub-millisecond timer.    │
+		// │    - Captures the incoming request path/method.         │
+		// ├─────────────────────────────────────────────────────────┤
+		// │ 2. RATE-LIMIT MIDDLEWARE                                │
+		// │    - Checks an in-memory map of Client IPs.             │
+		// │    - Deducts tokens from their bucket.                  │
+		// │    - Short-circuits with HTTP 429 if exceeded.          │
+		// ├─────────────────────────────────────────────────────────┤
+		// │ 3. AUTH MIDDLEWARE                                      │
+		// │    - Validates credentials (token / API key).           │
+		// │    - Rejects with HTTP 401 if missing/invalid.          │
+		// ├─────────────────────────────────────────────────────────┤
+		// │ 4. REVERSE-PROXY ROUTER                                 │
+		// │    - Picks a healthy CRUD API backend via Round-Robin.  │
+		// │    - Forwards request; streams response back.          │
+		// └─────────────────────────────────────────────────────────┘
 	})
+	gatewayMux.Handle("/", middleware.LoggingMiddleware(gatewayHandler))
 
 	gatewayServer := &http.Server{
 		Addr:              ":" + configuration.GetEnv("PORT", "80"),
@@ -180,4 +209,10 @@ func (a *App) Run() {
 	}
 
 	log.Println("Servers stopped cleanly.")
+}
+
+func setDefaultLogger() {
+	slog.SetDefault(slog.New(
+		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
+	).With("app", "trapigo"))
 }
