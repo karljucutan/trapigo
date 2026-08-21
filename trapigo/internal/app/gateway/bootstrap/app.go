@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -215,13 +216,24 @@ func (a *App) Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := a.GatewayServer.Shutdown(ctx); err != nil {
-		slog.Warn("gateway forced to shutdown", "error", err)
-	}
-	if err := a.AdminServer.Shutdown(ctx); err != nil {
-		slog.Warn("admin forced to shutdown", "error", err)
-	}
+	// Concurrently shutdown both servers
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if err := a.GatewayServer.Shutdown(ctx); err != nil {
+			slog.Warn("gateway forced to shutdown", "error", err)
+		}
+	}()
 
+	go func() {
+		defer wg.Done()
+		if err := a.AdminServer.Shutdown(ctx); err != nil {
+			slog.Warn("admin forced to shutdown", "error", err)
+		}
+	}()
+
+	wg.Wait()
 	slog.Info("servers stopped cleanly")
 }
 
