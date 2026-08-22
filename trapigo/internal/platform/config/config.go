@@ -11,8 +11,9 @@ type Config struct {
 }
 
 type HTTPConfig struct {
-	Routers  map[string]Router  `yaml:"routers"`
-	Services map[string]Service `yaml:"services"`
+	Routers   map[string]Router  `yaml:"routers"`
+	Services  map[string]Service `yaml:"services"`
+	RateLimit *RateLimit         `yaml:"rate-limit,omitempty"`
 }
 
 type Router struct {
@@ -22,6 +23,7 @@ type Router struct {
 
 type Service struct {
 	LoadBalancer LoadBalancer `yaml:"load-balancer"`
+	RateLimit    *RateLimit   `yaml:"rate-limit,omitempty"`
 }
 
 type LoadBalancer struct {
@@ -30,6 +32,17 @@ type LoadBalancer struct {
 
 type Server struct {
 	URL string `yaml:"url"`
+}
+
+type RateLimit struct {
+	Enabled     bool        `yaml:"enabled"`
+	TokenBucket TokenBucket `yaml:"token-bucket"`
+}
+
+type TokenBucket struct {
+	Capacity            int `yaml:"capacity"`
+	RefillRate          int `yaml:"refill-rate"`
+	RefillIntervalInSec int `yaml:"refill-interval-in-seconds"`
 }
 
 func LoadConfig(path string) (*Config, error) {

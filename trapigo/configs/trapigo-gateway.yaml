@@ -1,4 +1,12 @@
 http:
+  # Simple Global Rate Limiting Configuration. Rate Limiting in production is better configurable per service
+  rate-limit:
+    enabled: true
+    token-bucket:
+      capacity: 100
+      refill-rate: 100
+      refill-interval-in-seconds: 60
+
   routers:
     users-router:
       path-prefix: /api/v1/users
@@ -7,7 +15,7 @@ http:
     orders-router:
       path-prefix: /api/v1/orders
       service: orders-service
-
+ 
   services:
     users-service:
       load-balancer:

@@ -155,7 +155,8 @@ func CreateApp() (*App, error) {
 		// │    - Forwards request; streams response back.          │
 		// └─────────────────────────────────────────────────────────┘
 	})
-	gatewayMux.Handle("/", middleware.LoggingMiddleware(gatewayHandler))
+	rateLimitPolicy := middleware.NewRateLimitPolicy(cfg.HTTP.RateLimit)
+	gatewayMux.Handle("/", middleware.LoggingMiddleware(middleware.RateLimitMiddleware(rateLimitPolicy)(gatewayHandler)))
 
 	gatewayServer := &http.Server{
 		Addr:              ":" + configuration.GetEnv("PORT", "80"),
