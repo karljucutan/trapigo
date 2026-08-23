@@ -6,8 +6,14 @@ GET {{baseUrl}}/api/v1/users
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
-### Gateway: orders route
-GET {{baseUrl}}/api/v1/orders
+### Gateway: GO orders route
+GET {{baseUrl}}/api/v1/go-orders
+X-Forwarded-For: 203.0.113.42
+Accept: application/json
+
+### Gateway: .NET10 AOT orders route
+GET {{baseUrl}}/api/v1/dotnet10-aot-orders
+X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
 ### Admin: health check

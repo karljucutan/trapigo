@@ -12,8 +12,12 @@ http:
       path-prefix: /api/v1/users
       service: users-service
 
-    orders-router:
-      path-prefix: /api/v1/orders
+    go-orders-router:
+      path-prefix: /api/v1/go-orders
+      service: orders-service
+
+    dotnet10-aot-orders-router:
+      path-prefix: /api/v1/dotnet10-aot-orders
       service: orders-service
  
   services:
