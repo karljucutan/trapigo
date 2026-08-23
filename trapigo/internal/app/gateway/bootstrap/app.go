@@ -130,7 +130,6 @@ func CreateApp() (*App, error) {
 			"backend", backend.Id,
 		)
 
-		// TODO: Add basic reverse proxy ret
 		// [ Incoming Client Request ]
 		//            │
 		//            ▼
@@ -239,7 +238,22 @@ func (a *App) Run() {
 }
 
 func setDefaultLogger() {
+	level := slog.LevelInfo
+
+	if configuredLevel := strings.TrimSpace(strings.ToUpper(configuration.GetEnv("LOG_LEVEL", ""))); configuredLevel != "" {
+		switch configuredLevel {
+		case "DEBUG":
+			level = slog.LevelDebug
+		case "INFO":
+			level = slog.LevelInfo
+		case "WARN":
+			level = slog.LevelWarn
+		case "ERROR":
+			level = slog.LevelError
+		}
+	}
+
 	slog.SetDefault(slog.New(
-		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}),
 	).With("app", "trapigo"))
 }

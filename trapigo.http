@@ -3,6 +3,7 @@
 
 ### Gateway: users route
 GET {{baseUrl}}/api/v1/users
+X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
 ### Gateway: orders route

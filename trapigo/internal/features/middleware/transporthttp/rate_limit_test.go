@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestRateLimitMiddleware_AllowsRequestsWithinCapacity(t *testing.T) {
@@ -74,5 +75,28 @@ func TestRateLimitMiddleware_IgnoresDisabledConfig(t *testing.T) {
 	handler.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected status %d when rate limit is disabled, got %d", http.StatusOK, res.Code)
+	}
+}
+
+func TestTokenBucketLimiterReturnsDereferencedBucketState(t *testing.T) {
+	lastRefill := time.Now().UTC().Truncate(time.Second)
+	limiter := &tokenBucketLimiter{
+		buckets: map[string]*tokenBucketState{
+			"172.21.0.1": {
+				tokens:     2.5,
+				lastRefill: lastRefill,
+			},
+		},
+	}
+
+	state := limiter.buckets["172.21.0.1"]
+	if state == nil {
+		t.Fatal("expected bucket state for client key")
+	}
+	if state.tokens != 2.5 {
+		t.Fatalf("expected tokens 2.5, got %v", state.tokens)
+	}
+	if !state.lastRefill.Equal(lastRefill) {
+		t.Fatalf("expected lastRefill %v, got %v", lastRefill, state.lastRefill)
 	}
 }

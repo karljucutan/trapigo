@@ -1,6 +1,7 @@
 package transporthttp
 
 import (
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -63,11 +64,29 @@ func RateLimitMiddleware(policy *RateLimitPolicy) func(http.Handler) http.Handle
 		}
 
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			if !limiter.consume(clientKey(req)) {
+			key := clientKey(req)
+			allowed := limiter.consume(key)
+			state, _ := limiter.buckets[key]
+			if !allowed {
+				slog.Warn("rate limit exceeded",
+					"client", key,
+					"path", req.URL.Path,
+					"method", req.Method,
+					"tokens", state.tokens,
+					"last_refill", state.lastRefill,
+				)
 				rw.Header().Set("Retry-After", "1")
 				http.Error(rw, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
+
+			slog.Debug("rate limit allowed",
+				"client", key,
+				"path", req.URL.Path,
+				"method", req.Method,
+				"tokens", state.tokens,
+				"last_refill", state.lastRefill,
+			)
 
 			next.ServeHTTP(rw, req)
 		})
@@ -103,12 +122,12 @@ func (tb *tokenBucketLimiter) consume(key string) bool {
 		}
 	}
 
-	if state.tokens >= 1 {
+	allowed := state.tokens >= 1
+	if allowed {
 		state.tokens -= 1
-		return true
 	}
 
-	return false
+	return allowed
 }
 
 // TODO: Distributed bucket implementation using Redis
