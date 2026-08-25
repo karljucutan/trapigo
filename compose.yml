@@ -2,18 +2,18 @@ name: trapigo-monorepo
 
 services:
   # Example: rename to actual proj name db.
-  go-crud-db:
+  trapigo-services-db:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: gocrud
+      POSTGRES_DB: postgres
     ports:
     - "5432:5432"
     volumes:
-      - pgdata-gocrud:/var/lib/postgresql
+      - pgdata-trapigo-services:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d gocrud"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 4s
       timeout: 4s
       retries: 5
@@ -52,4 +52,4 @@ services:
   #     target: prod # Defaults to the production/compiled stage
 
 volumes:
-  pgdata-gocrud:
+  pgdata-trapigo-services:
