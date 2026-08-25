@@ -44,6 +44,20 @@ services:
     volumes:
       - ./trapigo/configs:/app/configs:ro
 
+  go-order-service:
+    build:
+      context: ./go-order-service
+      dockerfile: Dockerfile
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - DB_DSN=postgres://postgres:postgres@trapigo-services-db:5432/postgres?sslmode=disable
+      - APP_ENV=docker
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      trapigo-services-db:
+        condition: service_healthy
+
   # Example: rename to actual proj name.
   # go-crud-app:
   #   build:
