@@ -24,8 +24,8 @@ func main() {
 	}
 	defer db.Close()
 
-	uow := uow.NewSQLUnitOfWork(db, func(tx *sql.Tx) *stores.Stores {
-		return &stores.Stores{
+	uow := uow.NewSQLUnitOfWork(db, func(tx *sql.Tx) *stores.TxRepositories {
+		return &stores.TxRepositories{
 			Orders: repository.NewPostgresOrderRepositoryWithTx(tx),
 		}
 	})

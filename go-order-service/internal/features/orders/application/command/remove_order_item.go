@@ -15,19 +15,19 @@ type RemoveOrderItemCommand struct {
 }
 
 // RemoveOrderItemHandler removes an item from an order within a transaction.
-// It uses the generic UnitOfWork[*stores.Stores] pattern via RunInTx.
+// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
 type RemoveOrderItemHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewRemoveOrderItemHandler(u uow.UnitOfWork[*stores.Stores]) *RemoveOrderItemHandler {
+func NewRemoveOrderItemHandler(u uow.UnitOfWork[*stores.TxRepositories]) *RemoveOrderItemHandler {
 	return &RemoveOrderItemHandler{uow: u}
 }
 
 func (h *RemoveOrderItemHandler) Handle(ctx context.Context, cmd RemoveOrderItemCommand) (domain.Order, error) {
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.OrderID)

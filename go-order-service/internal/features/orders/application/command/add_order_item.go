@@ -17,19 +17,19 @@ type AddOrderItemCommand struct {
 }
 
 // AddOrderItemHandler adds an item to an order within a transaction.
-// It uses the generic UnitOfWork[*stores.Stores] pattern via RunInTx.
+// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
 type AddOrderItemHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewAddOrderItemHandler(u uow.UnitOfWork[*stores.Stores]) *AddOrderItemHandler {
+func NewAddOrderItemHandler(u uow.UnitOfWork[*stores.TxRepositories]) *AddOrderItemHandler {
 	return &AddOrderItemHandler{uow: u}
 }
 
 func (h *AddOrderItemHandler) Handle(ctx context.Context, cmd AddOrderItemCommand) (domain.Order, error) {
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.OrderID)

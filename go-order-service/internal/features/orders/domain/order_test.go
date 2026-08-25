@@ -161,7 +161,9 @@ func TestOrderUpdateItemRecalculatesSubtotalAndTotal(t *testing.T) {
 		t.Fatalf("NewOrder returned error: %v", err)
 	}
 
-	if err := order.UpdateItem(10, 5, 400); err != nil {
+	quantity := 5
+	unitPrice := int64(400)
+	if err := order.UpdateItem(10, &quantity, &unitPrice); err != nil {
 		t.Fatalf("UpdateItem returned error: %v", err)
 	}
 
@@ -175,5 +177,61 @@ func TestOrderUpdateItemRecalculatesSubtotalAndTotal(t *testing.T) {
 
 	if order.TotalAmountCents != 2000 {
 		t.Fatalf("total mismatch: got %d want %d", order.TotalAmountCents, 2000)
+	}
+}
+
+func TestOrderUpdateItemSupportsPartialPatch(t *testing.T) {
+	order, err := NewOrder(12, []OrderItem{{ID: 10, ProductID: 9, Quantity: 2, UnitPriceCents: 300}})
+	if err != nil {
+		t.Fatalf("NewOrder returned error: %v", err)
+	}
+
+	quantity := 4
+	if err := order.UpdateItem(10, &quantity, nil); err != nil {
+		t.Fatalf("UpdateItem partial patch returned error: %v", err)
+	}
+
+	if order.Items[0].Quantity != 4 {
+		t.Fatalf("quantity mismatch after partial patch: got %d want %d", order.Items[0].Quantity, 4)
+	}
+
+	if order.Items[0].UnitPriceCents != 300 {
+		t.Fatalf("unit price should stay unchanged, got %d want %d", order.Items[0].UnitPriceCents, 300)
+	}
+
+	if order.Items[0].SubtotalCents != 1200 {
+		t.Fatalf("subtotal mismatch after partial patch: got %d want %d", order.Items[0].SubtotalCents, 1200)
+	}
+
+	if order.TotalAmountCents != 1200 {
+		t.Fatalf("total mismatch after partial patch: got %d want %d", order.TotalAmountCents, 1200)
+	}
+}
+
+func TestOrderUpdateItemSupportsPriceOnlyPartialPatch(t *testing.T) {
+	order, err := NewOrder(12, []OrderItem{{ID: 10, ProductID: 9, Quantity: 2, UnitPriceCents: 300}})
+	if err != nil {
+		t.Fatalf("NewOrder returned error: %v", err)
+	}
+
+	unitPrice := int64(500)
+	if err := order.UpdateItem(10, nil, &unitPrice); err != nil {
+		t.Fatalf("UpdateItem price-only partial patch returned error: %v", err)
+	}
+
+	if order.Items[0].Quantity != 2 {
+		t.Fatalf("quantity should stay unchanged after price-only patch: got %d want %d", order.Items[0].Quantity, 2)
+	}
+
+	if order.Items[0].UnitPriceCents != 500 {
+		t.Fatalf("unit price mismatch after price-only patch: got %d want %d", order.Items[0].UnitPriceCents, 500)
+	}
+
+	if order.Items[0].SubtotalCents != 1000 {
+		t.Fatalf("subtotal mismatch after price-only patch: got %d want %d", order.Items[0].SubtotalCents, 1000)
+	}
+
+	if order.TotalAmountCents != 1000 {
+		t.Fatalf("total mismatch after price-only patch: got %d want %d", order.TotalAmountCents, 1000)
 	}
 }

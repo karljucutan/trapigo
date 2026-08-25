@@ -198,8 +198,8 @@ func (h *OrderHandler) handleUpdateOrderItem(w http.ResponseWriter, r *http.Requ
 	}
 
 	var input struct {
-		Quantity       int   `json:"quantity"`
-		UnitPriceCents int64 `json:"unit_price_cents"`
+		Quantity       *int   `json:"quantity"`
+		UnitPriceCents *int64 `json:"unit_price_cents"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)

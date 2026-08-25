@@ -12,24 +12,24 @@ import (
 type UpdateOrderItemCommand struct {
 	OrderID        int64
 	ItemID         int64
-	Quantity       int
-	UnitPriceCents int64
+	Quantity       *int
+	UnitPriceCents *int64
 }
 
 // UpdateOrderItemHandler updates an order item within a transaction.
-// It uses the generic UnitOfWork[*stores.Stores] pattern via RunInTx.
+// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
 type UpdateOrderItemHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewUpdateOrderItemHandler(u uow.UnitOfWork[*stores.Stores]) *UpdateOrderItemHandler {
+func NewUpdateOrderItemHandler(u uow.UnitOfWork[*stores.TxRepositories]) *UpdateOrderItemHandler {
 	return &UpdateOrderItemHandler{uow: u}
 }
 
 func (h *UpdateOrderItemHandler) Handle(ctx context.Context, cmd UpdateOrderItemCommand) (domain.Order, error) {
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.OrderID)

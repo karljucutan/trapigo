@@ -85,20 +85,33 @@ func (o *Order) RemoveItem(itemID int64) error {
 	return ErrOrderItemNotFound
 }
 
-func (o *Order) UpdateItem(itemID int64, quantity int, unitPriceCents int64) error {
+func (o *Order) UpdateItem(itemID int64, quantity *int, unitPriceCents *int64) error {
 	for i := range o.Items {
 		if o.Items[i].ID == itemID {
-			if quantity <= 0 {
-				return ErrInvalidQuantity
-			}
-			if unitPriceCents <= 0 {
-				return ErrInvalidPrice
+			if quantity == nil && unitPriceCents == nil {
+				return nil
 			}
 
 			oldSubtotal := o.Items[i].SubtotalCents
-			o.Items[i].Quantity = quantity
-			o.Items[i].UnitPriceCents = unitPriceCents
-			o.Items[i].SubtotalCents = int64(quantity) * unitPriceCents
+			newQuantity := o.Items[i].Quantity
+			newUnitPriceCents := o.Items[i].UnitPriceCents
+
+			if quantity != nil {
+				if *quantity <= 0 {
+					return ErrInvalidQuantity
+				}
+				newQuantity = *quantity
+			}
+			if unitPriceCents != nil {
+				if *unitPriceCents <= 0 {
+					return ErrInvalidPrice
+				}
+				newUnitPriceCents = *unitPriceCents
+			}
+
+			o.Items[i].Quantity = newQuantity
+			o.Items[i].UnitPriceCents = newUnitPriceCents
+			o.Items[i].SubtotalCents = int64(newQuantity) * newUnitPriceCents
 			o.Items[i].UpdatedAt = time.Now().UTC()
 			o.TotalAmountCents += o.Items[i].SubtotalCents - oldSubtotal
 			o.UpdatedAt = time.Now().UTC()

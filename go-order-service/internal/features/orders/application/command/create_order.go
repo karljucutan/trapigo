@@ -27,12 +27,12 @@ type CreateOrderResponse struct {
 }
 
 // CreateOrderHandler creates a new order within a transaction.
-// It uses the generic UnitOfWork[*stores.Stores] pattern via RunInTx.
+// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
 type CreateOrderHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewCreateOrderHandler(u uow.UnitOfWork[*stores.Stores]) *CreateOrderHandler {
+func NewCreateOrderHandler(u uow.UnitOfWork[*stores.TxRepositories]) *CreateOrderHandler {
 	return &CreateOrderHandler{uow: u}
 }
 
@@ -59,7 +59,7 @@ func (h *CreateOrderHandler) Handle(ctx context.Context, cmd CreateOrderCommand)
 	}
 
 	var created domain.Order
-	err = h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	err = h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		var err error
 		created, err = stores.Orders.Create(ctx, order)
 		return err

@@ -1,5 +1,7 @@
 @baseUrl = http://localhost
 @adminUrl = http://localhost:8080
+@orderId = 1
+@itemId = 1
 
 ### Gateway: users route
 GET {{baseUrl}}/api/v1/users
@@ -8,6 +10,76 @@ Accept: application/json
 
 ### Gateway: GO orders route
 GET {{baseUrl}}/api/v1/go-orders
+X-Forwarded-For: 203.0.113.42
+Accept: application/json
+
+### Gateway: GO orders - create order
+POST {{baseUrl}}/api/v1/go-orders
+X-Forwarded-For: 203.0.113.42
+Content-Type: application/json
+Accept: application/json
+
+{
+  "customer_id": 42,
+  "items": [
+    {
+      "product_id": 1001,
+      "quantity": 2,
+      "unit_price_cents": 2500
+    },
+    {
+      "product_id": 1002,
+      "quantity": 1,
+      "unit_price_cents": 1500
+    }
+  ]
+}
+
+### Gateway: GO orders - get order by id
+GET {{baseUrl}}/api/v1/go-orders/{{orderId}}
+X-Forwarded-For: 203.0.113.42
+Accept: application/json
+
+### Gateway: GO orders - update order status
+PATCH {{baseUrl}}/api/v1/go-orders/{{orderId}}/status
+X-Forwarded-For: 203.0.113.42
+Content-Type: application/json
+Accept: application/json
+
+{
+  "status": "paid"
+}
+
+### Gateway: GO orders - add order item
+POST {{baseUrl}}/api/v1/go-orders/{{orderId}}/items
+X-Forwarded-For: 203.0.113.42
+Content-Type: application/json
+Accept: application/json
+
+{
+  "product_id": 2001,
+  "quantity": 3,
+  "unit_price_cents": 3200
+}
+
+### Gateway: GO orders - update item
+PATCH {{baseUrl}}/api/v1/go-orders/{{orderId}}/items/{{itemId}}
+X-Forwarded-For: 203.0.113.42
+Content-Type: application/json
+Accept: application/json
+
+{
+  "quantity": 5,
+  "unit_price_cents": 3500
+}
+
+### Gateway: GO orders - remove item
+DELETE {{baseUrl}}/api/v1/go-orders/{{orderId}}/items/{{itemId}}
+X-Forwarded-For: 203.0.113.42
+Accept: application/json
+
+### Gateway: GO orders - delete order
+DELETE {{baseUrl}}/api/v1/go-orders/{{orderId}}
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 

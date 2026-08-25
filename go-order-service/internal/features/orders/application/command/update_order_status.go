@@ -16,12 +16,12 @@ type UpdateOrderStatusCommand struct {
 }
 
 // UpdateOrderStatusHandler updates the status of an order within a transaction.
-// It uses the generic UnitOfWork[*stores.Stores] pattern via RunInTx.
+// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
 type UpdateOrderStatusHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewUpdateOrderStatusHandler(u uow.UnitOfWork[*stores.Stores]) *UpdateOrderStatusHandler {
+func NewUpdateOrderStatusHandler(u uow.UnitOfWork[*stores.TxRepositories]) *UpdateOrderStatusHandler {
 	return &UpdateOrderStatusHandler{uow: u}
 }
 
@@ -32,7 +32,7 @@ func (h *UpdateOrderStatusHandler) Handle(ctx context.Context, cmd UpdateOrderSt
 
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.ID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.ID)

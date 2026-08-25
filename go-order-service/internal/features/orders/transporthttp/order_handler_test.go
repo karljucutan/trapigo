@@ -64,9 +64,9 @@ type inMemoryUnitOfWork struct {
 	repo *inMemoryOrderRepo
 }
 
-// RunInTx implements the generic UoW[*stores.Stores] interface for testing.
-func (u *inMemoryUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.Stores) error) error {
-	stores := &stores.Stores{Orders: u.repo}
+// RunInTx implements the generic UoW[*stores.TxRepositories] interface for testing.
+func (u *inMemoryUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.TxRepositories) error) error {
+	stores := &stores.TxRepositories{Orders: u.repo}
 	return fn(stores)
 }
 
@@ -257,6 +257,71 @@ func TestHandler_AddItemToOrder(t *testing.T) {
 	}
 	if order.TotalAmountCents != 6500 {
 		t.Fatalf("expected total 6500, got %d", order.TotalAmountCents)
+	}
+}
+
+func TestHandler_UpdateOrderItemSupportsPartialPatch(t *testing.T) {
+	handler, _ := newTestHandler(t)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	payload := bytes.NewBufferString(`{"quantity":4}`)
+	req := httptest.NewRequest(http.MethodPatch, "/orders/1/items/1", payload)
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+
+	mux.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d; body=%s", http.StatusOK, res.Code, res.Body.String())
+	}
+
+	var order domain.Order
+	if err := json.Unmarshal(res.Body.Bytes(), &order); err != nil {
+		t.Fatalf("failed to decode order JSON: %v", err)
+	}
+	if len(order.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(order.Items))
+	}
+	if order.Items[0].Quantity != 4 {
+		t.Fatalf("expected quantity 4, got %d", order.Items[0].Quantity)
+	}
+	if order.Items[0].UnitPriceCents != 2500 {
+		t.Fatalf("expected unit price 2500 to remain unchanged, got %d", order.Items[0].UnitPriceCents)
+	}
+	if order.TotalAmountCents != 10000 {
+		t.Fatalf("expected total 10000, got %d", order.TotalAmountCents)
+	}
+}
+
+func TestHandler_UpdateOrderItemSupportsPriceOnlyPartialPatch(t *testing.T) {
+	handler, _ := newTestHandler(t)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	payload := bytes.NewBufferString(`{"unit_price_cents":4000}`)
+	req := httptest.NewRequest(http.MethodPatch, "/orders/1/items/1", payload)
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+
+	mux.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d; body=%s", http.StatusOK, res.Code, res.Body.String())
+	}
+
+	var order domain.Order
+	if err := json.Unmarshal(res.Body.Bytes(), &order); err != nil {
+		t.Fatalf("failed to decode order JSON: %v", err)
+	}
+	if order.Items[0].Quantity != 2 {
+		t.Fatalf("expected quantity 2 to stay unchanged, got %d", order.Items[0].Quantity)
+	}
+	if order.Items[0].UnitPriceCents != 4000 {
+		t.Fatalf("expected unit price 4000, got %d", order.Items[0].UnitPriceCents)
+	}
+	if order.TotalAmountCents != 8000 {
+		t.Fatalf("expected total 8000, got %d", order.TotalAmountCents)
 	}
 }
 

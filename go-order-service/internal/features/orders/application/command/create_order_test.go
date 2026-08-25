@@ -17,9 +17,9 @@ type stubUnitOfWork struct {
 	repo *stubRepo
 }
 
-// RunInTx implements the generic UoW[*stores.Stores] interface for testing.
-func (u *stubUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.Stores) error) error {
-	stores := &stores.Stores{
+// RunInTx implements the generic UoW[*stores.TxRepositories] interface for testing.
+func (u *stubUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.TxRepositories) error) error {
+	stores := &stores.TxRepositories{
 		Orders: &stubOrderRepository{repo: u.repo},
 	}
 	return fn(stores)

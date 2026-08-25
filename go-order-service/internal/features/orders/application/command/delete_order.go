@@ -13,15 +13,15 @@ type DeleteOrderCommand struct {
 }
 
 type DeleteOrderHandler struct {
-	uow uow.UnitOfWork[*stores.Stores]
+	uow uow.UnitOfWork[*stores.TxRepositories]
 }
 
-func NewDeleteOrderHandler(u uow.UnitOfWork[*stores.Stores]) *DeleteOrderHandler {
+func NewDeleteOrderHandler(u uow.UnitOfWork[*stores.TxRepositories]) *DeleteOrderHandler {
 	return &DeleteOrderHandler{uow: u}
 }
 
 func (h *DeleteOrderHandler) Handle(ctx context.Context, cmd DeleteOrderCommand) error {
-	return h.uow.RunInTx(ctx, func(stores *stores.Stores) error {
+	return h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		if _, err := stores.Orders.GetByID(ctx, cmd.ID); err != nil {
 			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.ID)
 		}
