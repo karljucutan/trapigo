@@ -14,19 +14,29 @@ http:
 
     go-orders-router:
       path-prefix: /api/v1/go-orders
-      service: orders-service
+      service: go-order-service
 
-    dotnet10-aot-orders-router:
+    dotnet10aot-orders-router:
       path-prefix: /api/v1/dotnet10-aot-orders
-      service: orders-service
- 
+      service: dotnet10aot-order-service
+
   services:
     users-service:
       load-balancer:
         servers:
           - url: http://app-one:8080
 
+    go-order-service:
+      load-balancer:
+        servers:
+          - url: http://go-order-service:8080
+
     orders-service:
       load-balancer:
         servers:
           - url: http://app-two:8080
+
+    dotnet10aot-order-service:
+      load-balancer:
+        servers:
+          - url: http://dotnet10aot-order-service:8080

@@ -66,6 +66,32 @@ func TestLoadConfig_ServiceBackends(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
+	cfg, err := LoadConfig("../../../configs/trapigo-gateway.yaml")
+	if err != nil {
+		t.Fatalf("LoadConfig returned an error: %v", err)
+	}
+
+	router, ok := cfg.HTTP.Routers["go-orders-router"]
+	if !ok {
+		t.Fatal("expected go-orders-router to be present")
+	}
+	if router.Service != "go-order-service" {
+		t.Fatalf("unexpected go-orders-router service: %s", router.Service)
+	}
+	if router.PathPrefix != "/api/v1/go-orders" {
+		t.Fatalf("unexpected go-orders-router prefix: %s", router.PathPrefix)
+	}
+
+	service, ok := cfg.HTTP.Services["go-order-service"]
+	if !ok {
+		t.Fatal("expected go-order-service to be present")
+	}
+	if service.LoadBalancer.Servers[0].URL != "http://go-order-service:8080" {
+		t.Fatalf("unexpected go-order-service upstream: %s", service.LoadBalancer.Servers[0].URL)
+	}
+}
+
 func gatewayConfigFixture() string {
 	return `http:
   rate-limit:
