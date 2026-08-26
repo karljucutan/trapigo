@@ -5,10 +5,11 @@ import (
 	"log"
 	"net/http"
 
+	middlewaretransporthttp "go-order-service/internal/features/middleware/transporthttp"
 	"go-order-service/internal/features/orders/application/command"
 	"go-order-service/internal/features/orders/application/query"
 	"go-order-service/internal/features/orders/infrastructure/repository"
-	"go-order-service/internal/features/orders/transporthttp"
+	ordertransporthttp "go-order-service/internal/features/orders/transporthttp"
 	"go-order-service/internal/platform/config"
 	"go-order-service/internal/platform/database"
 	"go-order-service/internal/platform/stores"
@@ -40,7 +41,7 @@ func main() {
 	getOrderByIDHandler := query.NewGetOrderByIDHandler(repo)
 	listOrdersHandler := query.NewListOrdersHandler(repo)
 	deleteOrderHandler := command.NewDeleteOrderHandler(uow)
-	handler := transporthttp.NewOrderHandler(
+	handler := ordertransporthttp.NewOrderHandler(
 		createOrderHandler,
 		addOrderItemHandler,
 		updateOrderStatusHandler,
@@ -54,8 +55,10 @@ func main() {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
+	loggedMux := middlewaretransporthttp.LoggingMiddleware(mux)
+
 	log.Printf("order service listening on %s", cfg.Addr())
-	if err := http.ListenAndServe(cfg.Addr(), mux); err != nil {
+	if err := http.ListenAndServe(cfg.Addr(), loggedMux); err != nil {
 		log.Fatalf("http server failed: %v", err)
 	}
 }
