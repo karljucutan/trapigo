@@ -2,12 +2,16 @@ package transporthttp
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"go-order-service/internal/features/orders/application/command"
 	"go-order-service/internal/features/orders/application/query"
+	"go-order-service/internal/features/orders/domain"
 )
+
+const goOrdersRoutePrefix = "/api/v1/go-orders"
 
 type OrderHandler struct {
 	createOrderHandler     *command.CreateOrderHandler
@@ -51,6 +55,15 @@ func (h *OrderHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /orders/{id}/items/{itemId}", h.handleUpdateOrderItem)
 	mux.HandleFunc("DELETE /orders/{id}/items/{itemId}", h.handleRemoveOrderItem)
 	mux.HandleFunc("DELETE /orders/{id}", h.handleDeleteOrder)
+
+	mux.HandleFunc("GET "+goOrdersRoutePrefix, h.handleListOrders)
+	mux.HandleFunc("POST "+goOrdersRoutePrefix, h.createOrder)
+	mux.HandleFunc("GET "+goOrdersRoutePrefix+"/{id}", h.handleGetOrderByID)
+	mux.HandleFunc("PATCH "+goOrdersRoutePrefix+"/{id}/status", h.handleUpdateOrderStatus)
+	mux.HandleFunc("POST "+goOrdersRoutePrefix+"/{id}/items", h.handleAddOrderItem)
+	mux.HandleFunc("PATCH "+goOrdersRoutePrefix+"/{id}/items/{itemId}", h.handleUpdateOrderItem)
+	mux.HandleFunc("DELETE "+goOrdersRoutePrefix+"/{id}/items/{itemId}", h.handleRemoveOrderItem)
+	mux.HandleFunc("DELETE "+goOrdersRoutePrefix+"/{id}", h.handleDeleteOrder)
 }
 
 func (h *OrderHandler) handleListOrders(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +71,7 @@ func (h *OrderHandler) handleListOrders(w http.ResponseWriter, r *http.Request) 
 
 	orders, err := h.listOrdersHandler.Handle(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponse(w, err)
 		return
 	}
 
@@ -80,7 +93,7 @@ func (h *OrderHandler) handleGetOrderByID(w http.ResponseWriter, r *http.Request
 
 	order, err := h.getOrderByIDHandler.Handle(ctx, query.GetOrderByIDQuery{ID: id})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		h.writeErrorResponse(w, err)
 		return
 	}
 
@@ -101,7 +114,7 @@ func (h *OrderHandler) handleDeleteOrder(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.deleteOrderHandler.Handle(ctx, command.DeleteOrderCommand{ID: id}); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		h.writeErrorResponse(w, err)
 		return
 	}
 
@@ -131,7 +144,7 @@ func (h *OrderHandler) handleUpdateOrderStatus(w http.ResponseWriter, r *http.Re
 
 	order, err := h.updateOrderStatus.Handle(ctx, command.UpdateOrderStatusCommand{ID: id, Status: input.Status})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.writeErrorResponse(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -167,7 +180,7 @@ func (h *OrderHandler) handleAddOrderItem(w http.ResponseWriter, r *http.Request
 		UnitPriceCents: input.UnitPriceCents,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.writeErrorResponse(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, order)
@@ -213,7 +226,7 @@ func (h *OrderHandler) handleUpdateOrderItem(w http.ResponseWriter, r *http.Requ
 		UnitPriceCents: input.UnitPriceCents,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.writeErrorResponse(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -245,7 +258,7 @@ func (h *OrderHandler) handleRemoveOrderItem(w http.ResponseWriter, r *http.Requ
 
 	order, err := h.removeOrderItemHandler.Handle(ctx, command.RemoveOrderItemCommand{OrderID: orderID, ItemID: itemID})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.writeErrorResponse(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -281,11 +294,32 @@ func (h *OrderHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 		Items:      createItems,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.writeErrorResponse(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, order)
+}
+
+func (h *OrderHandler) writeErrorResponse(w http.ResponseWriter, err error) {
+	switch {
+	case err == nil:
+		return
+	case errors.Is(err, domain.ErrOrderNotFound), errors.Is(err, domain.ErrOrderItemNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, domain.ErrInvalidCustomerID),
+		errors.Is(err, domain.ErrOrderEmpty),
+		errors.Is(err, domain.ErrInvalidQuantity),
+		errors.Is(err, domain.ErrInvalidPrice),
+		errors.Is(err, domain.ErrInvalidProductID):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		h.writeInternalServerError(w)
+	}
+}
+
+func (h *OrderHandler) writeInternalServerError(w http.ResponseWriter) {
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

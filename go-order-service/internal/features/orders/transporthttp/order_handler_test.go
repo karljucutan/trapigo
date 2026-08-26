@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go-order-service/internal/features/orders/application/command"
@@ -122,6 +123,52 @@ func TestHandler_ListOrders(t *testing.T) {
 	if orders[0].CustomerID != 99 {
 		t.Fatalf("expected customer id 99, got %d", orders[0].CustomerID)
 	}
+}
+
+func TestHandler_DoesNotLeakDatabaseErrors(t *testing.T) {
+	failingRepo := &failingOrderRepo{err: errors.New("relation \"customer_order\" does not exist")}
+	handler := &OrderHandler{listOrdersHandler: query.NewListOrdersHandler(failingRepo)}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/go-orders", handler.handleListOrders)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/go-orders", nil)
+	res := httptest.NewRecorder()
+
+	mux.ServeHTTP(res, req)
+
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d; body=%s", http.StatusInternalServerError, res.Code, res.Body.String())
+	}
+	if strings.Contains(res.Body.String(), "customer_order") {
+		t.Fatalf("expected raw database error to be hidden, got %q", res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), http.StatusText(http.StatusInternalServerError)) {
+		t.Fatalf("expected generic internal error message, got %q", res.Body.String())
+	}
+}
+
+type failingOrderRepo struct {
+	err error
+}
+
+func (r *failingOrderRepo) Create(context.Context, domain.Order) (domain.Order, error) {
+	return domain.Order{}, r.err
+}
+
+func (r *failingOrderRepo) GetByID(context.Context, int64) (domain.Order, error) {
+	return domain.Order{}, r.err
+}
+
+func (r *failingOrderRepo) List(context.Context) ([]domain.Order, error) {
+	return nil, r.err
+}
+
+func (r *failingOrderRepo) Update(context.Context, domain.Order) (domain.Order, error) {
+	return domain.Order{}, r.err
+}
+
+func (r *failingOrderRepo) Delete(context.Context, int64) error {
+	return r.err
 }
 
 func TestHandler_GetOrderByID(t *testing.T) {

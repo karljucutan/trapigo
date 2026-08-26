@@ -35,7 +35,7 @@ func (h *UpdateOrderStatusHandler) Handle(ctx context.Context, cmd UpdateOrderSt
 	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.ID)
 		if err != nil {
-			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.ID)
+			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.ID)
 		}
 
 		order.UpdateStatus(cmd.Status)

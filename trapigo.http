@@ -8,12 +8,12 @@ GET {{baseUrl}}/api/v1/users
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
-# Gateway: GO orders route
+### Gateway: GO orders route
 GET {{baseUrl}}/api/v1/go-orders
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
-# Gateway: GO orders - create order
+### Gateway: GO orders - create order
 POST {{baseUrl}}/api/v1/go-orders
 X-Forwarded-For: 203.0.113.42
 Content-Type: application/json
@@ -35,12 +35,12 @@ Accept: application/json
   ]
 }
 
-# Gateway: GO orders - get order by id
+### Gateway: GO orders - get order by id
 GET {{baseUrl}}/api/v1/go-orders/{{orderId}}
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
-# Gateway: GO orders - update order status
+### Gateway: GO orders - update order status
 PATCH {{baseUrl}}/api/v1/go-orders/{{orderId}}/status
 X-Forwarded-For: 203.0.113.42
 Content-Type: application/json
@@ -50,7 +50,7 @@ Accept: application/json
   "status": "paid"
 }
 
-# Gateway: GO orders - add order item
+### Gateway: GO orders - add order item
 POST {{baseUrl}}/api/v1/go-orders/{{orderId}}/items
 X-Forwarded-For: 203.0.113.42
 Content-Type: application/json
@@ -62,7 +62,7 @@ Accept: application/json
   "unit_price_cents": 3200
 }
 
-# Gateway: GO orders - update item
+### Gateway: GO orders - update item
 PATCH {{baseUrl}}/api/v1/go-orders/{{orderId}}/items/{{itemId}}
 X-Forwarded-For: 203.0.113.42
 Content-Type: application/json
@@ -73,12 +73,12 @@ Accept: application/json
   "unit_price_cents": 3500
 }
 
-# Gateway: GO orders - remove item
+### Gateway: GO orders - remove item
 DELETE {{baseUrl}}/api/v1/go-orders/{{orderId}}/items/{{itemId}}
 X-Forwarded-For: 203.0.113.42
 Accept: application/json
 
-# Gateway: GO orders - delete order
+### Gateway: GO orders - delete order
 DELETE {{baseUrl}}/api/v1/go-orders/{{orderId}}
 X-Forwarded-For: 203.0.113.42
 Accept: application/json

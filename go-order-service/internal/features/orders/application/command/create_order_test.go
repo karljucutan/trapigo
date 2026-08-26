@@ -43,7 +43,7 @@ func (s *stubOrderRepository) Create(ctx context.Context, order domain.Order) (d
 func (s *stubOrderRepository) GetByID(ctx context.Context, id int64) (domain.Order, error) {
 	order, ok := s.repo.orders[id]
 	if !ok {
-		return domain.Order{}, errOrderNotFound
+		return domain.Order{}, domain.ErrOrderNotFound
 	}
 	return order, nil
 }

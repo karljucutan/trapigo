@@ -18,7 +18,7 @@ func (s *queryStubRepo) Create(ctx context.Context, order domain.Order) (domain.
 func (s *queryStubRepo) GetByID(ctx context.Context, id int64) (domain.Order, error) {
 	order, ok := s.orders[id]
 	if !ok {
-		return domain.Order{}, errOrderNotFound
+		return domain.Order{}, domain.ErrOrderNotFound
 	}
 	return order, nil
 }

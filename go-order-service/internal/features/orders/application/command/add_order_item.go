@@ -32,7 +32,7 @@ func (h *AddOrderItemHandler) Handle(ctx context.Context, cmd AddOrderItemComman
 	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
-			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.OrderID)
+			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.OrderID)
 		}
 
 		if err := order.AddItem(domain.OrderItem{

@@ -2,14 +2,11 @@ package command
 
 import (
 	"context"
-	"errors"
 
 	"go-order-service/internal/features/orders/domain"
 	"go-order-service/internal/platform/stores"
 	"go-order-service/internal/platform/uow"
 )
-
-var errOrderNotFound = errors.New("order not found")
 
 type CreateItemInput struct {
 	ProductID      int64

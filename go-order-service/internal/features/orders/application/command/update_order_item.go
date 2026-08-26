@@ -32,7 +32,7 @@ func (h *UpdateOrderItemHandler) Handle(ctx context.Context, cmd UpdateOrderItem
 	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
-			return fmt.Errorf("%w: %d", errOrderNotFound, cmd.OrderID)
+			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.OrderID)
 		}
 
 		if err := order.UpdateItem(cmd.ItemID, cmd.Quantity, cmd.UnitPriceCents); err != nil {

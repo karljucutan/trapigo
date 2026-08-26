@@ -8,5 +8,6 @@ var (
 	ErrInvalidQuantity   = errors.New("quantity must be greater than zero")
 	ErrInvalidPrice      = errors.New("unit price must be greater than zero")
 	ErrInvalidProductID  = errors.New("product id is required")
+	ErrOrderNotFound     = errors.New("order not found")
 	ErrOrderItemNotFound = errors.New("order item not found")
 )
