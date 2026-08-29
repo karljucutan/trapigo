@@ -124,11 +124,6 @@ func (r *PostgresOrderRepository) Update(ctx context.Context, order domain.Order
 		return domain.Order{}, err
 	}
 
-	existingItems, err := r.listItemsByOrderID(ctx, order.ID)
-	if err != nil {
-		return domain.Order{}, err
-	}
-	seen := make(map[int64]bool, len(order.Items))
 	for i := range order.Items {
 		item := order.Items[i]
 		if item.ID == 0 {
@@ -142,11 +137,9 @@ func (r *PostgresOrderRepository) Update(ctx context.Context, order domain.Order
 				return domain.Order{}, err
 			}
 			order.Items[i] = saved
-			seen[saved.ID] = true
 			continue
 		}
 
-		seen[item.ID] = true
 		_, err = r.runner.ExecContext(ctx, `
             UPDATE customer_order_item
             SET product_id = $1, quantity = $2, unit_price_cents = $3, subtotal_cents = $4, updated_at = $5
@@ -154,15 +147,6 @@ func (r *PostgresOrderRepository) Update(ctx context.Context, order domain.Order
         `, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents, item.UpdatedAt, item.ID, order.ID)
 		if err != nil {
 			return domain.Order{}, err
-		}
-	}
-
-	for _, item := range existingItems {
-		if !seen[item.ID] {
-			_, err = r.runner.ExecContext(ctx, `DELETE FROM customer_order_item WHERE id = $1 AND customer_order_id = $2`, item.ID, order.ID)
-			if err != nil {
-				return domain.Order{}, err
-			}
 		}
 	}
 
@@ -175,11 +159,7 @@ func (r *PostgresOrderRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *PostgresOrderRepository) listItemsByOrderID(ctx context.Context, orderID int64) ([]domain.OrderItem, error) {
-	return r.listItemsByOrderIDTx(ctx, r.runner, orderID)
-}
-
-func (r *PostgresOrderRepository) listItemsByOrderIDTx(ctx context.Context, runner database.SQLRunner, orderID int64) ([]domain.OrderItem, error) {
-	rows, err := runner.QueryContext(ctx, `
+	rows, err := r.runner.QueryContext(ctx, `
         SELECT id, customer_order_id, product_id, quantity, unit_price_cents, subtotal_cents, created_at, updated_at
         FROM customer_order_item
         WHERE customer_order_id = $1
