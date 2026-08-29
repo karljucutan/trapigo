@@ -25,10 +25,10 @@ func NewPostgresOrderRepositoryWithTx(tx *sql.Tx) *PostgresOrderRepository {
 
 func (r *PostgresOrderRepository) Create(ctx context.Context, order domain.Order) (domain.Order, error) {
 	row := r.runner.QueryRowContext(ctx, `
-        INSERT INTO customer_order (customer_id, status, total_amount_cents)
-        VALUES ($1, $2, $3)
+        INSERT INTO customer_order (customer_id, status, total_amount_cents, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id, customer_id, status, total_amount_cents, created_at, updated_at
-    `, order.CustomerID, order.Status, order.TotalAmountCents)
+    `, order.CustomerID, order.Status, order.TotalAmountCents, order.CreatedAt, order.UpdatedAt)
 
 	var created domain.Order
 	if err := row.Scan(&created.ID, &created.CustomerID, &created.Status, &created.TotalAmountCents, &created.CreatedAt, &created.UpdatedAt); err != nil {
@@ -40,9 +40,9 @@ func (r *PostgresOrderRepository) Create(ctx context.Context, order domain.Order
 		item := order.Items[i]
 		row := r.runner.QueryRowContext(ctx, `
             INSERT INTO customer_order_item (customer_order_id, product_id, quantity, unit_price_cents, subtotal_cents, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id, customer_order_id, product_id, quantity, unit_price_cents, subtotal_cents, created_at, updated_at
-        `, created.ID, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents)
+        `, created.ID, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents, item.CreatedAt, item.UpdatedAt)
 
 		var saved domain.OrderItem
 		if err := row.Scan(&saved.ID, &saved.OrderID, &saved.ProductID, &saved.Quantity, &saved.UnitPriceCents, &saved.SubtotalCents, &saved.CreatedAt, &saved.UpdatedAt); err != nil {
@@ -134,9 +134,9 @@ func (r *PostgresOrderRepository) Update(ctx context.Context, order domain.Order
 		if item.ID == 0 {
 			row := r.runner.QueryRowContext(ctx, `
                 INSERT INTO customer_order_item (customer_order_id, product_id, quantity, unit_price_cents, subtotal_cents, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, customer_order_id, product_id, quantity, unit_price_cents, subtotal_cents, created_at, updated_at
-            `, order.ID, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents)
+            `, order.ID, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents, item.CreatedAt, item.UpdatedAt)
 			var saved domain.OrderItem
 			if err := row.Scan(&saved.ID, &saved.OrderID, &saved.ProductID, &saved.Quantity, &saved.UnitPriceCents, &saved.SubtotalCents, &saved.CreatedAt, &saved.UpdatedAt); err != nil {
 				return domain.Order{}, err
@@ -149,9 +149,9 @@ func (r *PostgresOrderRepository) Update(ctx context.Context, order domain.Order
 		seen[item.ID] = true
 		_, err = r.runner.ExecContext(ctx, `
             UPDATE customer_order_item
-            SET product_id = $1, quantity = $2, unit_price_cents = $3, subtotal_cents = $4, updated_at = NOW()
-            WHERE id = $5 AND customer_order_id = $6
-        `, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents, item.ID, order.ID)
+            SET product_id = $1, quantity = $2, unit_price_cents = $3, subtotal_cents = $4, updated_at = $5
+            WHERE id = $6 AND customer_order_id = $7
+        `, item.ProductID, item.Quantity, item.UnitPriceCents, item.SubtotalCents, item.UpdatedAt, item.ID, order.ID)
 		if err != nil {
 			return domain.Order{}, err
 		}

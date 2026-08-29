@@ -1,19 +1,18 @@
 package transporthttp
 
 import (
-	"context"
 	"encoding/json"
 	stderrors "errors"
 	"net/http"
 	"strconv"
 
-	"github.com/karljucutan/buildingblocks/correlation"
-	"github.com/karljucutan/buildingblocks/problemdetails"
-
-	middlewaretransporthttp "go-order-service/internal/features/middleware/transporthttp"
 	"go-order-service/internal/features/orders/application/command"
 	"go-order-service/internal/features/orders/application/query"
 	"go-order-service/internal/features/orders/domain"
+
+	"github.com/karljucutan/buildingblocks/correlation"
+	bberrors "github.com/karljucutan/buildingblocks/errors"
+	"github.com/karljucutan/buildingblocks/problemdetails"
 )
 
 const goOrdersRoutePrefix = "/api/v1/go-orders"
@@ -76,7 +75,7 @@ func (h *OrderHandler) handleListOrders(w http.ResponseWriter, r *http.Request) 
 
 	orders, err := h.listOrdersHandler.Handle(ctx)
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 
@@ -98,7 +97,7 @@ func (h *OrderHandler) handleGetOrderByID(w http.ResponseWriter, r *http.Request
 
 	order, err := h.getOrderByIDHandler.Handle(ctx, query.GetOrderByIDQuery{ID: id})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 
@@ -119,7 +118,7 @@ func (h *OrderHandler) handleDeleteOrder(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.deleteOrderHandler.Handle(ctx, command.DeleteOrderCommand{ID: id}); err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 
@@ -149,7 +148,7 @@ func (h *OrderHandler) handleUpdateOrderStatus(w http.ResponseWriter, r *http.Re
 
 	order, err := h.updateOrderStatus.Handle(ctx, command.UpdateOrderStatusCommand{ID: id, Status: input.Status})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -185,7 +184,7 @@ func (h *OrderHandler) handleAddOrderItem(w http.ResponseWriter, r *http.Request
 		UnitPriceCents: input.UnitPriceCents,
 	})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, order)
@@ -231,7 +230,7 @@ func (h *OrderHandler) handleUpdateOrderItem(w http.ResponseWriter, r *http.Requ
 		UnitPriceCents: input.UnitPriceCents,
 	})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -263,7 +262,7 @@ func (h *OrderHandler) handleRemoveOrderItem(w http.ResponseWriter, r *http.Requ
 
 	order, err := h.removeOrderItemHandler.Handle(ctx, command.RemoveOrderItemCommand{OrderID: orderID, ItemID: itemID})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, order)
@@ -299,16 +298,17 @@ func (h *OrderHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 		Items:      createItems,
 	})
 	if err != nil {
-		h.writeErrorResponse(ctx, r, w, err)
+		h.writeErrorResponse(r, w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, order)
 }
 
-func (h *OrderHandler) writeErrorResponse(ctx context.Context, r *http.Request, w http.ResponseWriter, err error) {
+func (h *OrderHandler) writeErrorResponse(r *http.Request, w http.ResponseWriter, err error) {
 	requestID := correlation.ExtractOrGenerateRequestID(r)
-	ctx = middlewaretransporthttp.WithInternalError(ctx, err)
+	ctx := bberrors.WithInternalError(r.Context(), err)
+	*r = *r.WithContext(ctx)
 	var pd *problemdetails.ProblemDetails
 
 	switch {

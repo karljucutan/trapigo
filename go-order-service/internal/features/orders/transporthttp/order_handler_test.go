@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	"go-order-service/internal/features/orders/application/query"
 	"go-order-service/internal/features/orders/domain"
 	"go-order-service/internal/platform/stores"
+
+	"github.com/karljucutan/buildingblocks/middleware"
 )
 
 type inMemoryOrderRepo struct {
@@ -122,6 +125,33 @@ func TestHandler_ListOrders(t *testing.T) {
 	}
 	if orders[0].CustomerID != 99 {
 		t.Fatalf("expected customer id 99, got %d", orders[0].CustomerID)
+	}
+}
+
+func TestHandler_InternalErrorIsLogged(t *testing.T) {
+	var buf bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(previous)
+
+	handler := &OrderHandler{listOrdersHandler: query.NewListOrdersHandler(&failingOrderRepo{err: errors.New("relation \"customer_order\" does not exist")})}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/go-orders", func(w http.ResponseWriter, r *http.Request) {
+		handler.writeErrorResponse(r, w, errors.New("relation \"customer_order\" does not exist"))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/go-orders", nil)
+	res := httptest.NewRecorder()
+
+	middleware.LoggingMiddleware(mux).ServeHTTP(res, req)
+
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d; body=%s", http.StatusInternalServerError, res.Code, res.Body.String())
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "status=500") || !strings.Contains(output, "error=\"relation \\\"customer_order\\\" does not exist\"") {
+		t.Fatalf("expected 500 log with internal error message, got: %q", output)
 	}
 }
 
