@@ -3,9 +3,12 @@ package transporthttp
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	stderrors "errors"
 	"net/http"
 	"strconv"
+
+	"github.com/karljucutan/buildingblocks/correlation"
+	"github.com/karljucutan/buildingblocks/problemdetails"
 
 	middlewaretransporthttp "go-order-service/internal/features/middleware/transporthttp"
 	"go-order-service/internal/features/orders/application/command"
@@ -304,22 +307,44 @@ func (h *OrderHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) writeErrorResponse(ctx context.Context, r *http.Request, w http.ResponseWriter, err error) {
+	requestID := correlation.ExtractOrGenerateRequestID(r)
+	ctx = middlewaretransporthttp.WithInternalError(ctx, err)
+	var pd *problemdetails.ProblemDetails
+
 	switch {
 	case err == nil:
 		return
-	case errors.Is(err, domain.ErrOrderNotFound), errors.Is(err, domain.ErrOrderItemNotFound):
-		ctx = middlewaretransporthttp.WithInternalError(ctx, err)
-		http.Error(w, err.Error(), http.StatusNotFound)
-	case errors.Is(err, domain.ErrInvalidCustomerID),
-		errors.Is(err, domain.ErrOrderEmpty),
-		errors.Is(err, domain.ErrInvalidQuantity),
-		errors.Is(err, domain.ErrInvalidPrice),
-		errors.Is(err, domain.ErrInvalidProductID):
-		ctx = middlewaretransporthttp.WithInternalError(ctx, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	case stderrors.Is(err, domain.ErrOrderNotFound), stderrors.Is(err, domain.ErrOrderItemNotFound):
+		pd = problemdetails.New().
+			WithStatus(http.StatusNotFound).
+			WithType("about:blank").
+			WithTitle("Order Not Found").
+			WithDetail(err.Error()).
+			WithInstance("urn:request:" + requestID).
+			Build()
+		writeJSON(w, http.StatusNotFound, pd)
+	case stderrors.Is(err, domain.ErrInvalidCustomerID),
+		stderrors.Is(err, domain.ErrOrderEmpty),
+		stderrors.Is(err, domain.ErrInvalidQuantity),
+		stderrors.Is(err, domain.ErrInvalidPrice),
+		stderrors.Is(err, domain.ErrInvalidProductID):
+		pd = problemdetails.New().
+			WithStatus(http.StatusBadRequest).
+			WithType("about:blank").
+			WithTitle("Invalid Request").
+			WithDetail(err.Error()).
+			WithInstance("urn:request:" + requestID).
+			Build()
+		writeJSON(w, http.StatusBadRequest, pd)
 	default:
-		ctx = middlewaretransporthttp.WithInternalError(ctx, err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		pd = problemdetails.New().
+			WithStatus(http.StatusInternalServerError).
+			WithType("about:blank").
+			WithTitle("Internal Server Error").
+			WithDetail("An unexpected error occurred").
+			WithInstance("urn:request:" + requestID).
+			Build()
+		writeJSON(w, http.StatusInternalServerError, pd)
 	}
 }
 

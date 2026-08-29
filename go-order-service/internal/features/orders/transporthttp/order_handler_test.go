@@ -139,11 +139,30 @@ func TestHandler_DoesNotLeakDatabaseErrors(t *testing.T) {
 	if res.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d; body=%s", http.StatusInternalServerError, res.Code, res.Body.String())
 	}
+
+	// Parse Problem Details response
+	var problemDetails map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&problemDetails); err != nil {
+		t.Fatalf("expected valid JSON response, got error: %v; body=%s", err, res.Body.String())
+	}
+
+	// Verify Problem Details structure
+	if _, hasStatus := problemDetails["status"]; !hasStatus {
+		t.Fatalf("expected 'status' field in Problem Details, got %v", problemDetails)
+	}
+	if _, hasTitle := problemDetails["title"]; !hasTitle {
+		t.Fatalf("expected 'title' field in Problem Details, got %v", problemDetails)
+	}
+
+	// Verify database error is not leaked
 	if strings.Contains(res.Body.String(), "customer_order") {
 		t.Fatalf("expected raw database error to be hidden, got %q", res.Body.String())
 	}
-	if !strings.Contains(res.Body.String(), http.StatusText(http.StatusInternalServerError)) {
-		t.Fatalf("expected generic internal error message, got %q", res.Body.String())
+
+	// Verify generic internal error message is present
+	title := problemDetails["title"].(string)
+	if !strings.Contains(title, "Internal Server Error") {
+		t.Fatalf("expected generic internal error message in title, got %q", title)
 	}
 }
 

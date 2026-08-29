@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	middlewaretransporthttp "go-order-service/internal/features/middleware/transporthttp"
 	"go-order-service/internal/features/orders/application/command"
 	"go-order-service/internal/features/orders/application/query"
 	"go-order-service/internal/features/orders/infrastructure/repository"
@@ -14,6 +13,8 @@ import (
 	"go-order-service/internal/platform/database"
 	"go-order-service/internal/platform/stores"
 	"go-order-service/internal/platform/uow"
+
+	"github.com/karljucutan/buildingblocks/middleware"
 )
 
 func main() {
@@ -55,7 +56,7 @@ func main() {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	loggedMux := middlewaretransporthttp.LoggingMiddleware(mux)
+	loggedMux := middleware.LoggingMiddleware(mux)
 
 	log.Printf("order service listening on %s", cfg.Addr())
 	if err := http.ListenAndServe(cfg.Addr(), loggedMux); err != nil {

@@ -20,8 +20,8 @@ services:
 
   trapigo:
     build:
-      context: ./trapigo
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./trapigo/Dockerfile
       target: prod # Defaults to the production/compiled stage
     ports:
       - "80:80"        # Main gateway entrypoint (http://localhost/)
@@ -46,8 +46,8 @@ services:
 
   go-order-service:
     build:
-      context: ./go-order-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./go-order-service/Dockerfile
     environment:
       - HOST=0.0.0.0
       - PORT=8080

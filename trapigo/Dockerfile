@@ -4,9 +4,12 @@ RUN apk add --no-cache git gcc musl-dev
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY buildingblocks ./buildingblocks
+COPY trapigo/go.mod trapigo/go.sum ./trapigo/
+WORKDIR /src/trapigo
+ENV GOWORK=off
 RUN go mod download
-COPY . .
+COPY trapigo/. .
 
 # --- Stage 2: Development / Debugging Target ---
 FROM dev-base AS dev
@@ -22,6 +25,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -ldflags="-s -w" -o main .
 FROM alpine:latest AS prod
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
-COPY --from=builder /src/main .
+COPY --from=builder /src/trapigo/main .
 EXPOSE 8080
 CMD ["./main"]
