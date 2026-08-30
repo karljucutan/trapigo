@@ -34,8 +34,8 @@ func (u *SQLUnitOfWork[T]) RunInTx(ctx context.Context, fn func(T) error) error 
 		}
 	}()
 
-	stores := u.factory(tx)
-	if err := fn(stores); err != nil {
+	txrepositories := u.factory(tx)
+	if err := fn(txrepositories); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

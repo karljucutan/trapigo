@@ -1,4 +1,4 @@
-package stores
+package transactionrepositories
 
 import (
 	"go-order-service/internal/features/orders/domain"

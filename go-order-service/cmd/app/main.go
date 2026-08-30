@@ -11,7 +11,7 @@ import (
 	ordertransporthttp "go-order-service/internal/features/orders/transporthttp"
 	"go-order-service/internal/platform/config"
 	"go-order-service/internal/platform/database"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 	"go-order-service/internal/platform/uow"
 
 	"github.com/karljucutan/buildingblocks/middleware"
@@ -26,8 +26,8 @@ func main() {
 	}
 	defer db.Close()
 
-	uow := uow.NewSQLUnitOfWork(db, func(tx *sql.Tx) *stores.TxRepositories {
-		return &stores.TxRepositories{
+	uow := uow.NewSQLUnitOfWork(db, func(tx *sql.Tx) *transactionrepositories.TxRepositories {
+		return &transactionrepositories.TxRepositories{
 			Orders: repository.NewPostgresOrderRepositoryWithTx(tx),
 		}
 	})

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 	"go-order-service/internal/platform/uow"
 )
 
@@ -17,19 +17,19 @@ type AddOrderItemCommand struct {
 }
 
 // AddOrderItemHandler adds an item to an order within a transaction.
-// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
+// It uses the generic UnitOfWork[*transactionrepositories.TxRepositories] pattern via RunInTx.
 type AddOrderItemHandler struct {
-	uow uow.UnitOfWork[*stores.TxRepositories]
+	uow uow.UnitOfWork[*transactionrepositories.TxRepositories]
 }
 
-func NewAddOrderItemHandler(u uow.UnitOfWork[*stores.TxRepositories]) *AddOrderItemHandler {
+func NewAddOrderItemHandler(u uow.UnitOfWork[*transactionrepositories.TxRepositories]) *AddOrderItemHandler {
 	return &AddOrderItemHandler{uow: u}
 }
 
 func (h *AddOrderItemHandler) Handle(ctx context.Context, cmd AddOrderItemCommand) (domain.Order, error) {
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
+	err := h.uow.RunInTx(ctx, func(stores *transactionrepositories.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.OrderID)

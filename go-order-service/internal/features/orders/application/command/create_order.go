@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 	"go-order-service/internal/platform/uow"
 )
 
@@ -24,12 +24,12 @@ type CreateOrderResponse struct {
 }
 
 // CreateOrderHandler creates a new order within a transaction.
-// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
+// It uses the generic UnitOfWork[*transactionrepositories.TxRepositories] pattern via RunInTx.
 type CreateOrderHandler struct {
-	uow uow.UnitOfWork[*stores.TxRepositories]
+	uow uow.UnitOfWork[*transactionrepositories.TxRepositories]
 }
 
-func NewCreateOrderHandler(u uow.UnitOfWork[*stores.TxRepositories]) *CreateOrderHandler {
+func NewCreateOrderHandler(u uow.UnitOfWork[*transactionrepositories.TxRepositories]) *CreateOrderHandler {
 	return &CreateOrderHandler{uow: u}
 }
 
@@ -56,7 +56,7 @@ func (h *CreateOrderHandler) Handle(ctx context.Context, cmd CreateOrderCommand)
 	}
 
 	var created domain.Order
-	err = h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
+	err = h.uow.RunInTx(ctx, func(stores *transactionrepositories.TxRepositories) error {
 		var err error
 		created, err = stores.Orders.Create(ctx, order)
 		return err

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 	"go-order-service/internal/platform/uow"
 )
 
@@ -16,12 +16,12 @@ type UpdateOrderStatusCommand struct {
 }
 
 // UpdateOrderStatusHandler updates the status of an order within a transaction.
-// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
+// It uses the generic UnitOfWork[*transactionrepositories.TxRepositories] pattern via RunInTx.
 type UpdateOrderStatusHandler struct {
-	uow uow.UnitOfWork[*stores.TxRepositories]
+	uow uow.UnitOfWork[*transactionrepositories.TxRepositories]
 }
 
-func NewUpdateOrderStatusHandler(u uow.UnitOfWork[*stores.TxRepositories]) *UpdateOrderStatusHandler {
+func NewUpdateOrderStatusHandler(u uow.UnitOfWork[*transactionrepositories.TxRepositories]) *UpdateOrderStatusHandler {
 	return &UpdateOrderStatusHandler{uow: u}
 }
 
@@ -32,7 +32,7 @@ func (h *UpdateOrderStatusHandler) Handle(ctx context.Context, cmd UpdateOrderSt
 
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
+	err := h.uow.RunInTx(ctx, func(stores *transactionrepositories.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.ID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.ID)

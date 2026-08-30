@@ -14,7 +14,7 @@ import (
 	"go-order-service/internal/features/orders/application/command"
 	"go-order-service/internal/features/orders/application/query"
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 
 	"github.com/karljucutan/buildingblocks/middleware"
 )
@@ -68,9 +68,9 @@ type inMemoryUnitOfWork struct {
 	repo *inMemoryOrderRepo
 }
 
-// RunInTx implements the generic UoW[*stores.TxRepositories] interface for testing.
-func (u *inMemoryUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.TxRepositories) error) error {
-	stores := &stores.TxRepositories{Orders: u.repo}
+// RunInTx implements the generic UoW[*transactionrepositories.TxRepositories] interface for testing.
+func (u *inMemoryUnitOfWork) RunInTx(ctx context.Context, fn func(*transactionrepositories.TxRepositories) error) error {
+	stores := &transactionrepositories.TxRepositories{Orders: u.repo}
 	return fn(stores)
 }
 

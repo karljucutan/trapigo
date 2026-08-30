@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 	"go-order-service/internal/platform/uow"
 )
 
@@ -15,19 +15,19 @@ type RemoveOrderItemCommand struct {
 }
 
 // RemoveOrderItemHandler removes an item from an order within a transaction.
-// It uses the generic UnitOfWork[*stores.TxRepositories] pattern via RunInTx.
+// It uses the generic UnitOfWork[*transactionrepositories.TxRepositories] pattern via RunInTx.
 type RemoveOrderItemHandler struct {
-	uow uow.UnitOfWork[*stores.TxRepositories]
+	uow uow.UnitOfWork[*transactionrepositories.TxRepositories]
 }
 
-func NewRemoveOrderItemHandler(u uow.UnitOfWork[*stores.TxRepositories]) *RemoveOrderItemHandler {
+func NewRemoveOrderItemHandler(u uow.UnitOfWork[*transactionrepositories.TxRepositories]) *RemoveOrderItemHandler {
 	return &RemoveOrderItemHandler{uow: u}
 }
 
 func (h *RemoveOrderItemHandler) Handle(ctx context.Context, cmd RemoveOrderItemCommand) (domain.Order, error) {
 	var updated domain.Order
 
-	err := h.uow.RunInTx(ctx, func(stores *stores.TxRepositories) error {
+	err := h.uow.RunInTx(ctx, func(stores *transactionrepositories.TxRepositories) error {
 		order, err := stores.Orders.GetByID(ctx, cmd.OrderID)
 		if err != nil {
 			return fmt.Errorf("%w: %d", domain.ErrOrderNotFound, cmd.OrderID)

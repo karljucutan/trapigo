@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"go-order-service/internal/features/orders/domain"
-	"go-order-service/internal/platform/stores"
+	"go-order-service/internal/platform/transactionrepositories"
 )
 
 type stubRepo struct {
@@ -17,9 +17,9 @@ type stubUnitOfWork struct {
 	repo *stubRepo
 }
 
-// RunInTx implements the generic UoW[*stores.TxRepositories] interface for testing.
-func (u *stubUnitOfWork) RunInTx(ctx context.Context, fn func(*stores.TxRepositories) error) error {
-	stores := &stores.TxRepositories{
+// RunInTx implements the generic UoW[*transactionrepositories.TxRepositories] interface for testing.
+func (u *stubUnitOfWork) RunInTx(ctx context.Context, fn func(*transactionrepositories.TxRepositories) error) error {
+	stores := &transactionrepositories.TxRepositories{
 		Orders: &stubOrderRepository{repo: u.repo},
 	}
 	return fn(stores)
