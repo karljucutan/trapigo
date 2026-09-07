@@ -10,8 +10,8 @@ import (
 )
 
 type RemoveOrderItemCommand struct {
-	OrderID int64
-	ItemID  int64
+	OrderID int64 `json:"order_id"`
+	ItemID  int64 `json:"item_id"`
 }
 
 // RemoveOrderItemHandler removes an item from an order within a transaction.

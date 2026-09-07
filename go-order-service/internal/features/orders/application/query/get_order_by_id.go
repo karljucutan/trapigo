@@ -8,7 +8,7 @@ import (
 )
 
 type GetOrderByIDQuery struct {
-	ID int64
+	ID int64 `json:"id"`
 }
 
 type GetOrderByIDResponse struct {

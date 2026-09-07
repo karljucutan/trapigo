@@ -10,7 +10,7 @@ import (
 )
 
 type DeleteOrderCommand struct {
-	ID int64
+	ID int64 `json:"id"`
 }
 
 type DeleteOrderHandler struct {

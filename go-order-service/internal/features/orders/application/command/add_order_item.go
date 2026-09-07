@@ -10,10 +10,10 @@ import (
 )
 
 type AddOrderItemCommand struct {
-	OrderID        int64
-	ProductID      int64
-	Quantity       int
-	UnitPriceCents int64
+	OrderID        int64 `json:"order_id"`
+	ProductID      int64 `json:"product_id"`
+	Quantity       int   `json:"quantity"`
+	UnitPriceCents int64 `json:"unit_price_cents"`
 }
 
 // AddOrderItemHandler adds an item to an order within a transaction.

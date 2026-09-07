@@ -10,10 +10,10 @@ import (
 )
 
 type UpdateOrderItemCommand struct {
-	OrderID        int64
-	ItemID         int64
-	Quantity       *int
-	UnitPriceCents *int64
+	OrderID        int64  `json:"order_id"`
+	ItemID         int64  `json:"item_id"`
+	Quantity       *int   `json:"quantity"`
+	UnitPriceCents *int64 `json:"unit_price_cents"`
 }
 
 // UpdateOrderItemHandler updates an order item within a transaction.

@@ -9,9 +9,9 @@ import (
 )
 
 type CreateItemInput struct {
-	ProductID      int64
-	Quantity       int
-	UnitPriceCents int64
+	ProductID      int64 `json:"product_id"`
+	Quantity       int   `json:"quantity"`
+	UnitPriceCents int64 `json:"unit_price_cents"`
 }
 
 type CreateOrderCommand struct {

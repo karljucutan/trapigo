@@ -138,15 +138,14 @@ func (h *OrderHandler) handleUpdateOrderStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var input struct {
-		Status string `json:"status"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var cmd command.UpdateOrderStatusCommand
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	cmd.ID = id
 
-	order, err := h.updateOrderStatus.Handle(ctx, command.UpdateOrderStatusCommand{ID: id, Status: input.Status})
+	order, err := h.updateOrderStatus.Handle(ctx, cmd)
 	if err != nil {
 		h.writeErrorResponse(r, w, err)
 		return
@@ -167,22 +166,14 @@ func (h *OrderHandler) handleAddOrderItem(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var input struct {
-		ProductID      int64 `json:"product_id"`
-		Quantity       int   `json:"quantity"`
-		UnitPriceCents int64 `json:"unit_price_cents"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var cmd command.AddOrderItemCommand
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	cmd.OrderID = id
 
-	order, err := h.addOrderItemHandler.Handle(ctx, command.AddOrderItemCommand{
-		OrderID:        id,
-		ProductID:      input.ProductID,
-		Quantity:       input.Quantity,
-		UnitPriceCents: input.UnitPriceCents,
-	})
+	order, err := h.addOrderItemHandler.Handle(ctx, cmd)
 	if err != nil {
 		h.writeErrorResponse(r, w, err)
 		return
@@ -214,21 +205,15 @@ func (h *OrderHandler) handleUpdateOrderItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var input struct {
-		Quantity       *int   `json:"quantity"`
-		UnitPriceCents *int64 `json:"unit_price_cents"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var cmd command.UpdateOrderItemCommand
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
+	cmd.OrderID = orderID
+	cmd.ItemID = itemID
 
-	order, err := h.updateOrderItemHandler.Handle(ctx, command.UpdateOrderItemCommand{
-		OrderID:        orderID,
-		ItemID:         itemID,
-		Quantity:       input.Quantity,
-		UnitPriceCents: input.UnitPriceCents,
-	})
+	order, err := h.updateOrderItemHandler.Handle(ctx, cmd)
 	if err != nil {
 		h.writeErrorResponse(r, w, err)
 		return
@@ -271,12 +256,8 @@ func (h *OrderHandler) handleRemoveOrderItem(w http.ResponseWriter, r *http.Requ
 func (h *OrderHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var input struct {
-		CustomerID int64 `json:"customer_id"`
-		Items      []struct {
-			ProductID      int64 `json:"product_id"`
-			Quantity       int   `json:"quantity"`
-			UnitPriceCents int64 `json:"unit_price_cents"`
-		} `json:"items"`
+		CustomerID int64                     `json:"customer_id"`
+		Items      []command.CreateItemInput `json:"items"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -284,18 +265,9 @@ func (h *OrderHandler) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createItems := make([]command.CreateItemInput, 0, len(input.Items))
-	for _, item := range input.Items {
-		createItems = append(createItems, command.CreateItemInput{
-			ProductID:      item.ProductID,
-			Quantity:       item.Quantity,
-			UnitPriceCents: item.UnitPriceCents,
-		})
-	}
-
 	order, err := h.createOrderHandler.Handle(ctx, command.CreateOrderCommand{
 		CustomerID: input.CustomerID,
-		Items:      createItems,
+		Items:      input.Items,
 	})
 	if err != nil {
 		h.writeErrorResponse(r, w, err)

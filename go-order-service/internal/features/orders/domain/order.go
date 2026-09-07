@@ -3,13 +3,13 @@ package domain
 import "time"
 
 type Order struct {
-	ID               int64
-	CustomerID       int64
-	Status           string
-	TotalAmountCents int64
-	Items            []OrderItem
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               int64       `json:"id"`
+	CustomerID       int64       `json:"customer_id"`
+	Status           string      `json:"status"`
+	TotalAmountCents int64       `json:"total_amount_cents"`
+	Items            []OrderItem `json:"items"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
 }
 
 func NewOrder(customerID int64, items []OrderItem) (Order, error) {

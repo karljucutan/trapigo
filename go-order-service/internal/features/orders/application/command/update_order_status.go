@@ -11,8 +11,8 @@ import (
 )
 
 type UpdateOrderStatusCommand struct {
-	ID     int64
-	Status string
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
 }
 
 // UpdateOrderStatusHandler updates the status of an order within a transaction.
