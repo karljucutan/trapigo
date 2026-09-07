@@ -8,6 +8,10 @@ http:
       refill-interval-in-seconds: 60
 
   routers:
+    keycloak-router:
+      path-prefix: /auth
+      service: keycloak
+
     users-router:
       path-prefix: /api/v1/users
       service: users-service
@@ -21,6 +25,11 @@ http:
       service: dotnet10aot-order-service
 
   services:
+    keycloak:
+      load-balancer:
+        servers:
+          - url: http://keycloak:8080
+          
     users-service:
       load-balancer:
         servers:
