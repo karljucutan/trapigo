@@ -81,8 +81,15 @@ internal/features/auth/
 Before implementing, add the following Go modules to `go.mod`:
 
 ```bash
+go get golang.org/x/oauth2
 go get github.com/golang-jwt/jwt/v5
 ```
+
+**OAuth2 Library (Official Go)**:
+- **Package**: `golang.org/x/oauth2`
+- **Purpose**: Standard OAuth2 client flow support
+- **Usage**: Build authorization URL, exchange authorization code, refresh access tokens
+- **Why**: Official Go package, reduces manual OAuth2 protocol code and request-shaping errors
 
 **JWT Library**:
 - **Package**: `github.com/golang-jwt/jwt/v5`
@@ -107,19 +114,23 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create Keycloak client** (`keycloak.go`)
-   - [ ] Implement OIDC discovery endpoint client
-   - [ ] Build authorization URL with:
+   - [x] Implement OIDC discovery endpoint client
+   - [x] Configure `oauth2.Config` using discovered endpoints and gateway config:
+     - `ClientID`, `ClientSecret`, `RedirectURL`
+     - endpoint auth URL and token URL from discovery
+   - [x] Build authorization URL using `oauth2.Config.AuthCodeURL(...)` with:
      - `client_id`, `response_type=code`, `scope=openid`
      - `state`, `nonce`, `code_challenge`, `code_challenge_method=S256`
-   - [ ] Implement PKCE flow:
+   - [x] Implement PKCE flow:
      - Generate `code_verifier` (43-128 chars, unreserved characters)
      - Generate `code_challenge = BASE64URL(SHA256(code_verifier))`
-   - [ ] Implement token exchange:
-     - POST to Keycloak `/token` endpoint with authorization code
-     - Send `grant_type=authorization_code`, `client_id`, `client_secret`, `code`, `redirect_uri`, `code_verifier`
-   - [ ] Implement token refresh:
-     - POST with `grant_type=refresh_token`, `refresh_token`
-   - [ ] Error handling for Keycloak failures
+   - [x] Implement token exchange using `oauth2.Config.Exchange(...)`:
+     - Exchange authorization code with PKCE verifier
+     - Return access token, refresh token, token type, expiry fields
+   - [x] Implement token refresh using `oauth2.TokenSource(...)`:
+     - Refresh from `refresh_token`
+     - Return refreshed token fields
+   - [x] Error handling for Keycloak failures
 
 2. **Create JWT validator** (`jwt_validator.go`) — **SHARED component**
    - [ ] **Dependency**: Add `github.com/golang-jwt/jwt/v5` to `go.mod`
