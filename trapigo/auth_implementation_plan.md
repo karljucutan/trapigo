@@ -133,40 +133,40 @@ go get github.com/golang-jwt/jwt/v5
    - [x] Error handling for Keycloak failures
 
 2. **Create JWT validator** (`jwt_validator.go`) — **SHARED component**
-   - [ ] **Dependency**: Add `github.com/golang-jwt/jwt/v5` to `go.mod`
+   - [x] **Dependency**: Add `github.com/golang-jwt/jwt/v5` to `go.mod`
      - Provides: JWT parsing, signature verification, standard claim validation
      - Library handles: RSA/ECDSA verification, format validation, base64URL decoding
      - We implement: JWKS caching, claim validation logic, error mapping
-   - [ ] Fetch and cache Keycloak JWKS from `/.well-known/jwks.json`
-   - [ ] Implement JWKS key rotation/refresh logic
-   - [ ] Validate JWT signature using cached keys via `jwt.ParseWithClaims()`
-   - [ ] Validate JWT claims:
+   - [x] Fetch and cache Keycloak JWKS from `/.well-known/jwks.json`
+   - [x] Implement JWKS key rotation/refresh logic
+   - [x] Validate JWT signature using cached keys via `jwt.ParseWithClaims()`
+   - [x] Validate JWT claims:
      - `iss` (issuer matches Keycloak realm)
      - `aud` (audience matches client_id or expected value)
      - `exp` (expiration time not passed)
      - `nbf` (not-before time if present)
-   - [ ] Extract user information from JWT claims (sub, preferred_username, email)
-   - [ ] Return validation result with extracted claims
+   - [x] Extract user information from JWT claims (sub, preferred_username, email)
+   - [x] Return validation result with extracted claims
    - **Note**: This validator is reused by both browser (web) and native authentication flows in the middleware
 
 3. **Create domain models & errors** (`domain/`)
-   - [ ] `domain/errors.go`:
+   - [x] `domain/errors.go`:
      - `KeycloakConnectionError`
      - `InvalidJWTError`
      - `ExpiredTokenError`
      - `InvalidStateError`
      - `InvalidCallbackError`
-   - [ ] `domain/claims.go` — JWT claims domain model (shared across auth flows)
+   - [x] `domain/claims.go` — JWT claims domain model (shared across auth flows)
 
 **Testing**:
-- [ ] Unit tests for PKCE generation
-- [ ] Mock Keycloak responses for token exchange
-- [ ] Mock JWKS and test JWT validation with various claim combinations
+- [x] Unit tests for PKCE generation
+- [x] Mock Keycloak responses for token exchange
+- [x] Mock JWKS and test JWT validation with various claim combinations
 
 **Validation**:
-- [ ] Can connect to Keycloak OIDC discovery endpoint
-- [ ] Can parse JWKS and validate JWTs offline
-- [ ] PKCE flow generates valid code_challenge
+- [x] Can connect to Keycloak OIDC discovery endpoint
+- [x] Can parse JWKS and validate JWTs offline
+- [x] PKCE flow generates valid code_challenge
 
 ---
 
