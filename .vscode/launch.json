@@ -14,7 +14,7 @@
             "substitutePath": [
                 {
                     "from": "${workspaceFolder}/trapigo",
-                    "to": "/app"
+                    "to": "/src/trapigo"
                 }
             ]
         },

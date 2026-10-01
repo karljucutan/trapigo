@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	middleware "github.com/karljucutan/trapigo/trapigo/internal/features/middleware/transporthttp"
 )
@@ -67,4 +68,18 @@ func TestSetDefaultLoggerUsesConfiguredLogLevel(t *testing.T) {
 	if !strings.Contains(string(out), "level=DEBUG") {
 		t.Fatalf("expected debug log output, got: %q", string(out))
 	}
+}
+
+func TestParseAllowedOriginsFallsBackToFrontendOrigin(t *testing.T) {
+	origins := parseAllowedOrigins(nil, "http://localhost:3000/path")
+	if len(origins) != 1 || origins[0] != "http://localhost:3000/path" {
+		t.Fatalf("unexpected origins: %#v", origins)
+	}
+}
+
+func TestParseSameSiteDefaultsToLax(t *testing.T) {
+	if parseSameSite("invalid") != http.SameSiteLaxMode {
+		t.Fatal("expected invalid SameSite to default to lax")
+	}
+	_ = time.Second
 }

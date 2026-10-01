@@ -881,28 +881,28 @@ using HttpOnly token cookies.
 Before considering the implementation complete, verify all of the following:
 
 ```text
-[ ] Authorization Code Flow is used
-[ ] PKCE S256 is used
-[ ] state is generated and validated
-[ ] nonce is generated and validated when using the ID token
-[ ] Redirect URI is exact and configured in Keycloak
-[ ] Client secret is never exposed to the browser/native app
-[ ] Access token cookie is HttpOnly
-[ ] Refresh token cookie is HttpOnly
-[ ] Cookies use Secure in production
-[ ] SameSite policy is intentional
-[ ] JWT signature is validated
-[ ] JWT issuer is validated
-[ ] JWT audience is validated
-[ ] JWT expiration is validated
-[ ] Required roles/scopes are validated
-[ ] Keycloak signing keys are cached
-[ ] Native Bearer requests do not use browser refresh logic
-[ ] Browser cookie requests do use transparent refresh logic
-[ ] New refresh token replaces the old cookie when Keycloak returns one
-[ ] Browser state-changing requests have CSRF protection
-[ ] Tokens are never logged
-[ ] Tokens are never returned in API response bodies
+[x] Authorization Code Flow is used
+[x] PKCE S256 is used
+[x] state is generated and validated
+[x] nonce is generated and validated when using the ID token
+[x] Redirect URI is exact and configured in Keycloak
+[x] Client secret is never exposed to the browser/native app
+[x] Access token cookie is HttpOnly
+[x] Refresh token cookie is HttpOnly
+[x] Cookies use Secure in production
+[x] SameSite policy is intentional
+[x] JWT signature is validated
+[x] JWT issuer is validated
+[x] JWT audience is validated
+[x] JWT expiration is validated
+[x] Required roles/scopes are validated
+[x] Keycloak signing keys are cached
+[x] Native Bearer requests do not use browser refresh logic
+[x] Browser cookie requests do use transparent refresh logic
+[x] New refresh token replaces the old cookie when Keycloak returns one
+[x] Browser state-changing requests have CSRF protection
+[x] Tokens are never logged
+[x] Tokens are never returned in API response bodies
 ```
 
 ---

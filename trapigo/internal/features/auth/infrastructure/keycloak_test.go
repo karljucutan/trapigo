@@ -26,7 +26,7 @@ func TestBuildAuthorizationURL_IncludesExpectedParams(t *testing.T) {
 	server := newMockOIDCServer(t, tokenAssertion{})
 	defer server.Close()
 
-	client, err := NewClient(Config{
+	client, err := NewKeycloakClient(Config{
 		IssuerURL:   server.URL,
 		ClientID:    "trapigo-gateway",
 		RedirectURI: "https://api.example.com/web/auth/callback",
@@ -79,7 +79,7 @@ func TestExchangeAuthorizationCode_SendsExpectedPayload(t *testing.T) {
 	server := newMockOIDCServer(t, assertion)
 	defer server.Close()
 
-	client, err := NewClient(Config{
+	client, err := NewKeycloakClient(Config{
 		IssuerURL:    server.URL,
 		ClientID:     "trapigo-gateway",
 		ClientSecret: "super-secret",
@@ -104,7 +104,7 @@ func TestRefreshToken_SendsExpectedPayload(t *testing.T) {
 	server := newMockOIDCServer(t, assertion)
 	defer server.Close()
 
-	client, err := NewClient(Config{
+	client, err := NewKeycloakClient(Config{
 		IssuerURL:    server.URL,
 		ClientID:     "trapigo-gateway",
 		ClientSecret: "super-secret",

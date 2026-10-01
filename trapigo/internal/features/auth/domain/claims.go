@@ -7,6 +7,7 @@ type Claims struct {
 	Subject   string
 	Issuer    string
 	Audience  []string
+	Scopes    []string
 	Email     string
 	Username  string
 	ExpiresAt time.Time

@@ -31,8 +31,8 @@ type DiscoveryDocument struct {
 	JWKSURI               string `json:"jwks_uri"`
 }
 
-// Client handles OIDC discovery and token-related calls to Keycloak.
-type Client struct {
+// KeycloakClient handles OIDC discovery and token-related calls to Keycloak.
+type KeycloakClient struct {
 	cfg        Config
 	httpClient *http.Client
 
@@ -40,7 +40,7 @@ type Client struct {
 	discovery *DiscoveryDocument
 }
 
-func NewClient(cfg Config, httpClient *http.Client) (*Client, error) {
+func NewKeycloakClient(cfg Config, httpClient *http.Client) (*KeycloakClient, error) {
 	if strings.TrimSpace(cfg.IssuerURL) == "" {
 		return nil, errors.New("issuer URL is required")
 	}
@@ -54,13 +54,13 @@ func NewClient(cfg Config, httpClient *http.Client) (*Client, error) {
 		httpClient = http.DefaultClient
 	}
 
-	return &Client{
+	return &KeycloakClient{
 		cfg:        cfg,
 		httpClient: httpClient,
 	}, nil
 }
 
-func (c *Client) Discover(ctx context.Context) (*DiscoveryDocument, error) {
+func (c *KeycloakClient) Discover(ctx context.Context) (*DiscoveryDocument, error) {
 	c.mu.RLock()
 	if c.discovery != nil {
 		doc := *c.discovery
@@ -111,7 +111,7 @@ type AuthorizationURLParams struct {
 	Scopes        []string
 }
 
-func (c *Client) BuildAuthorizationURL(ctx context.Context, params AuthorizationURLParams) (string, error) {
+func (c *KeycloakClient) BuildAuthorizationURL(ctx context.Context, params AuthorizationURLParams) (string, error) {
 	if strings.TrimSpace(params.State) == "" {
 		return "", errors.New("state is required")
 	}
@@ -139,7 +139,7 @@ func (c *Client) BuildAuthorizationURL(ctx context.Context, params Authorization
 	), nil
 }
 
-func (c *Client) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error) {
+func (c *KeycloakClient) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error) {
 	if strings.TrimSpace(code) == "" {
 		return nil, errors.New("authorization code is required")
 	}
@@ -165,7 +165,7 @@ func (c *Client) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifi
 	return token, nil
 }
 
-func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+func (c *KeycloakClient) RefreshToken(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 	if strings.TrimSpace(refreshToken) == "" {
 		return nil, errors.New("refresh token is required")
 	}
@@ -187,7 +187,7 @@ func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*oauth2
 	return token, nil
 }
 
-func (c *Client) oauthConfig(ctx context.Context) (*oauth2.Config, error) {
+func (c *KeycloakClient) oauthConfig(ctx context.Context) (*oauth2.Config, error) {
 	doc, err := c.Discover(ctx)
 	if err != nil {
 		return nil, err

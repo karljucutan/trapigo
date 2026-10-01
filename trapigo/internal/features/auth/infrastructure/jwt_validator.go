@@ -22,6 +22,7 @@ import (
 type JWTValidator struct {
 	issuerURL  string
 	clientID   string
+	cacheTTL   time.Duration
 	httpClient *http.Client
 
 	mu       sync.RWMutex
@@ -41,19 +42,21 @@ type jwk struct {
 	E   string `json:"e"`
 }
 
-type keycloakClaims struct {
-	jwt.RegisteredClaims
-	Email             string `json:"email"`
-	PreferredUsername string `json:"preferred_username"`
+func NewJWTValidator(issuerURL, clientID string, httpClient *http.Client) *JWTValidator {
+	return NewJWTValidatorWithCacheTTL(issuerURL, clientID, time.Hour, httpClient)
 }
 
-func NewJWTValidator(issuerURL, clientID string, httpClient *http.Client) *JWTValidator {
+func NewJWTValidatorWithCacheTTL(issuerURL, clientID string, cacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
+	}
+	if cacheTTL <= 0 {
+		cacheTTL = time.Hour
 	}
 	return &JWTValidator{
 		issuerURL:  strings.TrimRight(issuerURL, "/"),
 		clientID:   clientID,
+		cacheTTL:   cacheTTL,
 		httpClient: httpClient,
 		keys:       map[string]jwt.VerificationKey{},
 	}
@@ -73,7 +76,6 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 		jwt.WithValidMethods([]string{"RS256"}),
 		jwt.WithIssuer(v.issuerURL),
 		jwt.WithExpirationRequired(),
-		jwt.WithNotBeforeRequired(),
 		jwt.WithLeeway(30 * time.Second), // Allow 30s clock skew between servers
 	}
 
@@ -82,14 +84,25 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 		parserOpts = append(parserOpts, jwt.WithAudience(v.clientID))
 	}
 
-	parsed, err := jwt.ParseWithClaims(tokenString, &keycloakClaims{}, func(token *jwt.Token) (any, error) {
+	// Parse and validate the token using Keycloak's JWKS:
+	//   1. Read the JWT kid from the header
+	//   2. Fetch the matching RSA public key from the cached JWKS
+	//   3. Verify the JWT signature cryptographically
+	//   4. Validate standard claims: alg, iss, aud, exp, nbf, etc.
+	parsed, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
 			return nil, domain.ErrInvalidJWT
 		}
 		key, ok := v.lookupKey(kid)
 		if !ok {
-			return nil, fmt.Errorf("%w: unknown key id %s", domain.ErrInvalidJWT, kid)
+			if refreshErr := v.refreshJWKS(ctx, true); refreshErr != nil {
+				return nil, refreshErr
+			}
+			key, ok = v.lookupKey(kid)
+			if !ok {
+				return nil, fmt.Errorf("%w: unknown key id %s", domain.ErrInvalidJWT, kid)
+			}
 		}
 		return key, nil
 	}, parserOpts...)
@@ -100,16 +113,17 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 		return nil, fmt.Errorf("%w: %v", domain.ErrInvalidJWT, err)
 	}
 
-	claims, ok := parsed.Claims.(*keycloakClaims)
+	claims, ok := parsed.Claims.(*jwt.RegisteredClaims)
 	if !ok || claims == nil {
 		return nil, domain.ErrInvalidJWT
 	}
 
+	email, username, scopes := extractJWTExtras(tokenString)
 	result := &domain.Claims{
 		Subject:  claims.Subject,
 		Issuer:   claims.Issuer,
-		Email:    claims.Email,
-		Username: claims.PreferredUsername,
+		Email:    email,
+		Username: username,
 		Raw:      tokenString,
 	}
 	if result.Username == "" {
@@ -124,12 +138,38 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 	for _, aud := range claims.Audience {
 		result.Audience = append(result.Audience, aud)
 	}
+	if scopes != "" {
+		for scope := range strings.FieldsSeq(scopes) {
+			result.Scopes = append(result.Scopes, scope)
+		}
+	}
 	return result, nil
 }
 
+func extractJWTExtras(tokenString string) (string, string, string) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil || token == nil {
+		return "", "", ""
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", ""
+	}
+
+	email, _ := claims["email"].(string)
+	username, _ := claims["preferred_username"].(string)
+	scope, _ := claims["scope"].(string)
+	return email, username, scope
+}
+
 func (v *JWTValidator) ensureJWKS(ctx context.Context) error {
+	return v.refreshJWKS(ctx, false)
+}
+
+func (v *JWTValidator) refreshJWKS(ctx context.Context, force bool) error {
 	v.mu.RLock()
-	if len(v.keys) > 0 && time.Since(v.lastSync) < 1*time.Hour {
+	if !force && len(v.keys) > 0 && time.Since(v.lastSync) < v.cacheTTL {
 		v.mu.RUnlock()
 		return nil
 	}

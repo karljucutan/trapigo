@@ -182,43 +182,43 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create OAuth state domain model** (`domain/oauth_state.go`)
-   - [ ] `OAuthState` struct containing:
+  - [x] `OAuthState` struct containing:
      - `state` (CSRF protection)
      - `nonce` (ID token validation)
      - `code_verifier` (PKCE)
      - `created_at` (expiration tracking)
-   - [ ] Validation methods (not expired, valid format)
+  - [x] Validation methods (not expired, valid format)
 
 2. **Create OAuth state store** (`oauth_state_store.go`)
-   - [ ] Interface: `OAuthStateStore`
+  - [x] Interface: `OAuthStateStore`
      - `SaveState(ctx context.Context, state *OAuthState) error`
      - `GetState(ctx context.Context, stateValue string) (*OAuthState, error)`
      - `DeleteState(ctx context.Context, stateValue string) error`
-   - [ ] In-memory implementation with automatic cleanup of expired states
-   - [ ] Note: Consider Redis implementation for multi-instance deployments later
+  - [x] In-memory implementation with automatic cleanup of expired states
+  - [x] Note: Consider Redis implementation for multi-instance deployments later
 
 3. **Create cookie manager** (`cookie_manager.go`)
-   - [ ] Constants for cookie names:
+  - [x] Constants for cookie names:
      - `web_access_token`
      - `web_refresh_token`
-   - [ ] Function to create access token cookie:
+  - [x] Function to create access token cookie:
      - HttpOnly, Secure (production), SameSite=Lax, Path=/
      - Configurable max-age based on token expiration
-   - [ ] Function to create refresh token cookie:
+  - [x] Function to create refresh token cookie:
      - Same attributes as access token
      - Longer max-age
-   - [ ] Function to create "clear" cookies (max-age=0, same attributes)
-   - [ ] Helper to extract token from cookie by name
+  - [x] Function to create "clear" cookies (max-age=0, same attributes)
+  - [x] Helper to extract token from cookie by name
 
 **Testing**:
-- [ ] Unit tests for cookie creation with correct attributes
-- [ ] Unit tests for cookie clearing
-- [ ] Unit tests for OAuth state expiration
+- [x] Unit tests for cookie creation with correct attributes
+- [x] Unit tests for cookie clearing
+- [x] Unit tests for OAuth state expiration
 
 **Validation**:
-- [ ] Cookies have correct HttpOnly, Secure, SameSite attributes
-- [ ] Cookies are properly cleared (max-age=0)
-- [ ] OAuth states expire after configured duration
+- [x] Cookies have correct HttpOnly, Secure, SameSite attributes
+- [x] Cookies are properly cleared (max-age=0)
+- [x] OAuth states expire after configured duration
 
 ---
 
@@ -237,65 +237,65 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create login command** (`application/command/login.go`)
-   - [ ] Generate `state`, `nonce`, `code_verifier`
-   - [ ] Calculate `code_challenge`
-   - [ ] Save OAuth state to store with expiration
-   - [ ] Return Keycloak authorization URL
+  - [x] Generate `state`, `nonce`, `code_verifier`
+  - [x] Calculate `code_challenge`
+  - [x] Save OAuth state to store with expiration
+  - [x] Return Keycloak authorization URL
 
 2. **Create callback command** (`application/command/callback.go`)
-   - [ ] Extract `code` and `state` from query parameters
-   - [ ] Retrieve OAuth state from store
-   - [ ] Validate `state` matches stored value
-   - [ ] Exchange code with Keycloak using `code_verifier`
-   - [ ] Receive access and refresh tokens
-   - [ ] Validate tokens (signature, issuer, audience)
-   - [ ] Delete OAuth state from store (one-time use)
-   - [ ] Return tokens for cookie setting
+  - [x] Extract `code` and `state` from query parameters
+  - [x] Retrieve OAuth state from store
+  - [x] Validate `state` matches stored value
+  - [x] Exchange code with Keycloak using `code_verifier`
+  - [x] Receive access and refresh tokens
+  - [x] Validate tokens (signature, issuer, audience)
+  - [x] Delete OAuth state from store (one-time use)
+  - [x] Return tokens for cookie setting
 
 3. **Create logout command** (`application/command/logout.go`)
-   - [ ] Optionally revoke refresh token with Keycloak
-   - [ ] Return cookie clear instructions
+  - [x] Optionally revoke refresh token with Keycloak
+  - [x] Return cookie clear instructions
 
 4. **Create get current user query** (`application/query/get_current_user.go`)
-   - [ ] Accept validated JWT or extract from context
-   - [ ] Extract user info from JWT claims
-   - [ ] Return user info without exposing tokens
+  - [x] Accept validated JWT or extract from context
+  - [x] Extract user info from JWT claims
+  - [x] Return user info without exposing tokens
 
 5. **Create HTTP handlers** (`transporthttp/auth_handler.go`)
-   - [ ] `HandleLogin(w http.ResponseWriter, r *http.Request)`
+  - [x] `HandleLogin(w http.ResponseWriter, r *http.Request)`
      - GET `/web/auth/login`
      - Call login command
      - Redirect to Keycloak authorization URL
-   - [ ] `HandleCallback(w http.ResponseWriter, r *http.Request)`
+  - [x] `HandleCallback(w http.ResponseWriter, r *http.Request)`
      - GET `/web/auth/callback`
      - Call callback command
      - Set cookies in response
      - Redirect to frontend application
-   - [ ] `HandleLogout(w http.ResponseWriter, r *http.Request)`
+  - [x] `HandleLogout(w http.ResponseWriter, r *http.Request)`
      - POST `/web/auth/logout`
      - Call logout command
      - Clear cookies
      - Redirect or return 200
-   - [ ] `HandleMe(w http.ResponseWriter, r *http.Request)`
+  - [x] `HandleMe(w http.ResponseWriter, r *http.Request)`
      - GET `/web/auth/me`
      - Extract auth from context (set by middleware)
      - Call get current user query
      - Return JSON with user info or 401
 
 **Testing**:
-- [ ] Test login endpoint redirects correctly
-- [ ] Test callback with valid authorization code
-- [ ] Test callback with invalid state (reject)
-- [ ] Test callback with expired OAuth state (reject)
-- [ ] Test logout clears cookies
-- [ ] Test `/web/auth/me` returns authenticated user
-- [ ] Test `/web/auth/me` returns 401 when unauthenticated
+- [x] Test login endpoint redirects correctly
+- [x] Test callback with valid authorization code
+- [x] Test callback with invalid state (reject)
+- [x] Test callback with expired OAuth state (reject)
+- [x] Test logout clears cookies
+- [x] Test `/web/auth/me` returns authenticated user
+- [x] Test `/web/auth/me` returns 401 when unauthenticated
 
 **Validation**:
-- [ ] `/web/auth/login` redirects to Keycloak
-- [ ] `/web/auth/callback?code=...&state=...` exchanges code and sets cookies
-- [ ] `/web/auth/logout` clears cookies
-- [ ] `/web/auth/me` returns user info when authenticated
+- [x] `/web/auth/login` redirects to Keycloak
+- [x] `/web/auth/callback?code=...&state=...` exchanges code and sets cookies
+- [x] `/web/auth/logout` clears cookies
+- [x] `/web/auth/me` returns user info when authenticated
 
 ---
 
@@ -310,17 +310,17 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create authentication middleware** (`middleware/authentication.go`) — **SHARED component**
-   - [ ] Implement precedence for auth detection:
+  - [x] Implement precedence for auth detection:
      1. `Authorization: Bearer <JWT>` (native/direct-token)
      2. `web_access_token` cookie (browser/BFF)
      3. No credentials → 401
    - **Note**: This middleware applies to ALL `/api/*` routes and intelligently routes to either Bearer or Cookie flow
-   - [ ] For Bearer token:
+  - [x] For Bearer token:
      - Extract token from header
      - Validate JWT using jwt_validator
      - If expired → 401 (do not refresh)
      - If valid → extract claims and add to request context
-   - [ ] For browser cookie:
+  - [x] For browser cookie:
      - Extract `web_access_token` cookie
      - Validate JWT using jwt_validator
      - If valid → extract claims and add to request context
@@ -332,21 +332,21 @@ go get github.com/golang-jwt/jwt/v5
          - Set `web_access_token` cookie with new token
          - Set `web_refresh_token` cookie if new token returned
          - Extract claims from new token and add to context
-   - [ ] Add `http.Handler` wrapper for easy middleware integration
-   - [ ] Context keys for storing authenticated user/claims
+  - [x] Add `http.Handler` wrapper for easy middleware integration
+  - [x] Context keys for storing authenticated user/claims
 
 **Testing**:
-- [ ] Test Bearer token validation (valid/expired/invalid)
-- [ ] Test cookie extraction and validation
-- [ ] Test token refresh on expired access token
-- [ ] Test 401 for missing credentials
-- [ ] Test precedence when both Bearer and cookie present (Bearer wins)
+- [x] Test Bearer token validation (valid/expired/invalid)
+- [x] Test cookie extraction and validation
+- [x] Test token refresh on expired access token
+- [x] Test 401 for missing credentials
+- [x] Test precedence when both Bearer and cookie present (Bearer wins)
 
 **Validation**:
-- [ ] Middleware correctly detects auth mechanism
-- [ ] Expired bearer tokens return 401
-- [ ] Expired browser access tokens are refreshed transparently
-- [ ] Valid tokens allow request to proceed
+- [x] Middleware correctly detects auth mechanism
+- [x] Expired bearer tokens return 401
+- [x] Expired browser access tokens are refreshed transparently
+- [x] Valid tokens allow request to proceed
 
 ---
 
@@ -361,25 +361,25 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create request gateway** (`gateway/request_gateway.go`)
-   - [ ] Accept authenticated request with user context
-   - [ ] Extract access token from context
-   - [ ] Add `Authorization: Bearer <access_token>` to outbound request
-   - [ ] Proxy request to downstream API (orders service, etc.)
-   - [ ] Handle downstream errors:
+  - [x] Accept authenticated request with user context
+  - [x] Extract access token from context
+  - [x] Add `Authorization: Bearer <access_token>` to outbound request
+  - [x] Proxy request to downstream API (orders service, etc.)
+  - [x] Handle downstream errors:
      - 401 → may indicate token validation issue at downstream, return 401
      - 403 → authorization/permission issue, return 403
      - Other errors → proxy error response
-   - [ ] Return response to client unchanged
+  - [x] Return response to client unchanged
 
 **Testing**:
-- [ ] Test request forwarding with valid token
-- [ ] Test authorization header added to upstream request
-- [ ] Test downstream 401 is returned to client
-- [ ] Test downstream 500 is returned to client
+- [x] Test request forwarding with valid token
+- [x] Test authorization header added to upstream request
+- [x] Test downstream 401 is returned to client
+- [x] Test downstream 500 is returned to client
 
 **Validation**:
-- [ ] Authenticated requests are forwarded with Bearer token
-- [ ] Downstream API responses are passed through correctly
+- [x] Authenticated requests are forwarded with Bearer token
+- [x] Downstream API responses are passed through correctly
 
 ---
 
@@ -390,36 +390,35 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Create main router/bootstrap** (`internal/app/gateway/bootstrap/app.go` or similar)
-   - [ ] Initialize shared Keycloak client (from `auth/infrastructure/keycloak.go`)
-   - [ ] Initialize shared JWT validator with Keycloak JWKS cache (from `auth/infrastructure/jwt_validator.go`)
-   - [ ] Initialize shared cookie manager (from `auth/infrastructure/cookie_manager.go`)
-   - [ ] Initialize shared OAuth state store (from `auth/infrastructure/oauth_state_store.go`)
-   - [ ] Initialize shared authentication middleware (from `auth/middleware/authentication.go`)
-   - [ ] Register `/web/auth/*` routes with web-specific auth handlers (from `auth/web/transporthttp/`)
-   - [ ] Wrap `/api/*` routes with shared authentication middleware
-   - [ ] Set up downstream request gateway for `/api/*` (from `auth/gateway/`)
+  - [x] Initialize shared Keycloak client (from `auth/infrastructure/keycloak.go`)
+  - [x] Initialize shared JWT validator with Keycloak JWKS cache (from `auth/infrastructure/jwt_validator.go`)
+  - [x] Initialize shared cookie manager (from `auth/infrastructure/cookie_manager.go`)
+  - [x] Initialize shared OAuth state store (from `auth/infrastructure/oauth_state_store.go`)
+  - [x] Initialize shared authentication middleware (from `auth/middleware/authentication.go`)
+  - [x] Register `/web/auth/*` routes with web-specific auth handlers (from `auth/web/transporthttp/`)
+  - [x] Wrap `/api/*` routes with shared authentication middleware
+  - [x] Set up downstream request gateway for `/api/*` (from `auth/gateway/`)
    - **Note**: All `/api/*` routes use the same shared authentication middleware, which internally handles both Bearer and Cookie flows
 
 2. **Configuration** (`internal/platform/config/config.go`)
-   - [ ] `keycloak.issuer_url`
-   - [ ] `keycloak.client_id`
-   - [ ] `keycloak.client_secret`
-   - [ ] `keycloak.redirect_uri` (e.g., `https://example.com/web/auth/callback`)
-   - [ ] `auth.cookie_secure` (true in production)
-   - [ ] `auth.cookie_same_site` (Lax or Strict)
-   - [ ] `auth.state_expiration` (e.g., 10 minutes)
-   - [ ] `auth.token_cache_ttl` (JWKS cache)
-   - [ ] `downstream_api.base_url` (e.g., `http://go-order-service:8080`)
+  - [x] `keycloak.issuer_url`
+  - [x] `keycloak.client_id`
+  - [x] `keycloak.client_secret`
+  - [x] `keycloak.redirect_uri` (e.g., `https://example.com/web/auth/callback`)
+  - [x] `auth.cookie_secure` (true in production)
+  - [x] `auth.cookie_same_site` (Lax or Strict)
+  - [x] `auth.state_expiration` (e.g., 10 minutes)
+  - [x] `auth.token_cache_ttl` (JWKS cache)
 
 3. **Environment setup**
-   - [ ] Create `.env.example` with auth configuration
-   - [ ] Document required Keycloak client setup
+  - [x] Create `.env.example` with auth configuration
+  - [x] Document required Keycloak client setup
 
 **Testing**:
-- [ ] Integration test: Login flow end-to-end
-- [ ] Integration test: Browser makes `/api/*` request after login
-- [ ] Integration test: Token refresh on expired access token
-- [ ] Integration test: Logout clears cookies
+- [x] Integration test: Login flow end-to-end
+- [x] Integration test: Browser makes `/api/*` request after login
+- [x] Integration test: Token refresh on expired access token
+- [x] Integration test: Logout clears cookies
 
 ---
 
@@ -430,40 +429,40 @@ go get github.com/golang-jwt/jwt/v5
 **Tasks**:
 
 1. **Security checklist** (from auth_plan.md section 24)
-   - [ ] Authorization Code Flow is used
-   - [ ] PKCE S256 is used
-   - [ ] `state` is generated and validated
-   - [ ] `nonce` is generated (for ID token validation if using ID token)
-   - [ ] Redirect URI is exact and configured in Keycloak
-   - [ ] Client secret is never exposed to browser/native app
-   - [ ] Access token cookie is HttpOnly
-   - [ ] Refresh token cookie is HttpOnly
-   - [ ] Cookies use Secure in production
-   - [ ] SameSite policy is intentional (Lax default)
-   - [ ] JWT signature is validated
-   - [ ] JWT issuer is validated
-   - [ ] JWT audience is validated
-   - [ ] JWT expiration is validated
-   - [ ] Tokens are never logged
-   - [ ] Tokens are never returned in API response bodies
+  - [x] Authorization Code Flow is used
+  - [x] PKCE S256 is used
+  - [x] `state` is generated and validated
+  - [x] `nonce` is generated (for ID token validation if using ID token)
+  - [x] Redirect URI is exact and configured in Keycloak
+  - [x] Client secret is never exposed to browser/native app
+  - [x] Access token cookie is HttpOnly
+  - [x] Refresh token cookie is HttpOnly
+  - [x] Cookies use Secure in production
+  - [x] SameSite policy is intentional (Lax default)
+  - [x] JWT signature is validated
+  - [x] JWT issuer is validated
+  - [x] JWT audience is validated
+  - [x] JWT expiration is validated
+  - [x] Tokens are never logged
+  - [x] Tokens are never returned in API response bodies
 
 2. **CSRF Protection** (section 17)
-   - [ ] Verify SameSite cookie behavior
-   - [ ] Consider CSRF token for state-changing requests if needed
-   - [ ] Test Origin header validation for sensitive endpoints
+  - [x] Verify SameSite cookie behavior
+  - [x] Consider CSRF token for state-changing requests if needed
+  - [x] Test Origin header validation for sensitive endpoints
 
 3. **Error handling**
-   - [ ] Keycloak errors don't leak sensitive info
-   - [ ] Expired tokens result in 401, not 500
-   - [ ] Invalid state in callback is rejected (not exchanged)
+  - [x] Keycloak errors don't leak sensitive info
+  - [x] Expired tokens result in 401, not 500
+  - [x] Invalid state in callback is rejected (not exchanged)
 
 4. **Integration testing**
-   - [ ] Test complete browser login/logout cycle
-   - [ ] Test native app direct token flow (no browser auth)
-   - [ ] Test token refresh scenarios
-   - [ ] Test concurrent requests with token refresh
-   - [ ] Test invalid tokens are rejected
-   - [ ] Test downstream API receives correct Authorization header
+  - [x] Test complete browser login/logout cycle
+  - [x] Test native app direct token flow (no browser auth)
+  - [x] Test token refresh scenarios
+  - [x] Test concurrent requests with token refresh
+  - [x] Test invalid tokens are rejected
+  - [x] Test downstream API receives correct Authorization header
 
 ---
 
@@ -484,8 +483,6 @@ auth:
   state_expiration_seconds: 600  # 10 minutes
   jwt_cache_ttl_seconds: 3600    # 1 hour
 
-downstream_api:
-  orders_service: "http://go-order-service:8080"
 ```
 
 ---
@@ -508,13 +505,13 @@ ORDERS_SERVICE_URL=http://go-order-service:8080
 
 | Step | Milestone | Completed |
 |------|-----------|-----------|
-| 1 | Keycloak integration working | [ ] |
-| 2 | Cookie & OAuth state management | [ ] |
-| 3 | `/web/auth/*` endpoints functional | [ ] |
-| 4 | Authentication middleware routing requests | [ ] |
-| 5 | Downstream API requests forwarded with Bearer token | [ ] |
-| 6 | End-to-end browser login flow working | [ ] |
-| 7 | All security requirements verified | [ ] |
+| 1 | Keycloak integration working | [x] |
+| 2 | Cookie & OAuth state management | [x] |
+| 3 | `/web/auth/*` endpoints functional | [x] |
+| 4 | Authentication middleware routing requests | [x] |
+| 5 | Downstream API requests forwarded with Bearer token | [x] |
+| 6 | End-to-end browser login flow working | [x] |
+| 7 | All security requirements verified | [x] |
 
 ---
 

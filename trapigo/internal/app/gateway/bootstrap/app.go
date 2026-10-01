@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	authgateway "github.com/karljucutan/trapigo/trapigo/internal/features/auth/gateway"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/core/domain"
 	middleware "github.com/karljucutan/trapigo/trapigo/internal/features/middleware/transporthttp"
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
@@ -75,8 +76,7 @@ func CreateApp() (*App, error) {
 		}
 	}
 
-	gatewayMux := http.NewServeMux()
-	gatewayHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	proxyHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		var matchedRoute *domain.Router
 		for _, route := range loadBalancer.Routers {
 			if strings.HasPrefix(req.URL.Path, route.PathPrefix) {
@@ -154,12 +154,26 @@ func CreateApp() (*App, error) {
 		// │    - Forwards request; streams response back.          │
 		// └─────────────────────────────────────────────────────────┘
 	})
+
+	auth, err := buildAuthComponents(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	gatewayMux := http.NewServeMux()
+	gatewayMux.Handle("/web/auth/login", http.HandlerFunc(auth.handler.HandleLogin))
+	gatewayMux.Handle("/web/auth/callback", http.HandlerFunc(auth.handler.HandleCallback))
+	gatewayMux.Handle("/web/auth/logout", http.HandlerFunc(auth.handler.HandleLogout))
+	gatewayMux.Handle("/web/auth/me", auth.middleware(http.HandlerFunc(auth.handler.HandleMe)))
+	gatewayMux.Handle("/api/", auth.middleware(authgateway.AddAuthorizationHeader(proxyHandler)))
+	gatewayMux.Handle("/", proxyHandler)
+
 	rateLimitPolicy := middleware.NewRateLimitPolicy(cfg.HTTP.RateLimit)
-	gatewayMux.Handle("/", middleware.LoggingMiddleware(middleware.RateLimitMiddleware(rateLimitPolicy)(gatewayHandler)))
+	rootHandler := middleware.LoggingMiddleware(middleware.RateLimitMiddleware(rateLimitPolicy)(gatewayMux))
 
 	gatewayServer := &http.Server{
 		Addr:              ":" + configuration.GetEnv("PORT", "80"),
-		Handler:           gatewayMux,
+		Handler:           rootHandler,
 		ReadHeaderTimeout: configuration.GetEnvDuration("READ_HEADER_TIMEOUT", 5, time.Second),
 		ReadTimeout:       0,
 		WriteTimeout:      0,
@@ -235,25 +249,4 @@ func (a *App) Run() {
 
 	wg.Wait()
 	slog.Info("servers stopped cleanly")
-}
-
-func setDefaultLogger() {
-	level := slog.LevelInfo
-
-	if configuredLevel := strings.TrimSpace(strings.ToUpper(configuration.GetEnv("LOG_LEVEL", ""))); configuredLevel != "" {
-		switch configuredLevel {
-		case "DEBUG":
-			level = slog.LevelDebug
-		case "INFO":
-			level = slog.LevelInfo
-		case "WARN":
-			level = slog.LevelWarn
-		case "ERROR":
-			level = slog.LevelError
-		}
-	}
-
-	slog.SetDefault(slog.New(
-		slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}),
-	).With("app", "trapigo"))
 }

@@ -66,6 +66,21 @@ func TestLoadConfig_ServiceBackends(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_ExpandsEnvironmentVariables(t *testing.T) {
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "top-secret")
+	configPath := writeConfigFile(t, `keycloak:
+  client_secret: ${KEYCLOAK_CLIENT_SECRET}
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig returned an error: %v", err)
+	}
+	if cfg.Keycloak.ClientSecret != "top-secret" {
+		t.Fatalf("expected expanded client secret, got %q", cfg.Keycloak.ClientSecret)
+	}
+}
+
 func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
 	cfg, err := LoadConfig("../../../configs/trapigo-gateway.yaml")
 	if err != nil {

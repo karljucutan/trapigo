@@ -51,14 +51,14 @@ func NewOrderHandler(
 }
 
 func (h *OrderHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /orders", h.handleListOrders)
-	mux.HandleFunc("POST /orders", h.createOrder)
-	mux.HandleFunc("GET /orders/{id}", h.handleGetOrderByID)
-	mux.HandleFunc("PATCH /orders/{id}/status", h.handleUpdateOrderStatus)
-	mux.HandleFunc("POST /orders/{id}/items", h.handleAddOrderItem)
-	mux.HandleFunc("PATCH /orders/{id}/items/{itemId}", h.handleUpdateOrderItem)
-	mux.HandleFunc("DELETE /orders/{id}/items/{itemId}", h.handleRemoveOrderItem)
-	mux.HandleFunc("DELETE /orders/{id}", h.handleDeleteOrder)
+	// mux.HandleFunc("GET /orders", h.handleListOrders)
+	// mux.HandleFunc("POST /orders", h.createOrder)
+	// mux.HandleFunc("GET /orders/{id}", h.handleGetOrderByID)
+	// mux.HandleFunc("PATCH /orders/{id}/status", h.handleUpdateOrderStatus)
+	// mux.HandleFunc("POST /orders/{id}/items", h.handleAddOrderItem)
+	// mux.HandleFunc("PATCH /orders/{id}/items/{itemId}", h.handleUpdateOrderItem)
+	// mux.HandleFunc("DELETE /orders/{id}/items/{itemId}", h.handleRemoveOrderItem)
+	// mux.HandleFunc("DELETE /orders/{id}", h.handleDeleteOrder)
 
 	mux.HandleFunc("GET "+goOrdersRoutePrefix, h.handleListOrders)
 	mux.HandleFunc("POST "+goOrdersRoutePrefix, h.createOrder)

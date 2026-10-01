@@ -3,9 +3,9 @@ http:
   rate-limit:
     enabled: true
     token-bucket:
-      capacity: 100
-      refill-rate: 100
-      refill-interval-in-seconds: 60
+      capacity: 300
+      refill-rate: 1.67
+      refill-interval-in-seconds: 1
 
   routers:
     keycloak-router:
@@ -35,3 +35,19 @@ http:
       load-balancer:
         servers:
           - url: http://dotnet10aot-order-service:8080
+
+keycloak:
+  issuer_url: http://keycloak:8080/auth/realms/CompanyA
+  client_id: trapigo-apigateway
+  client_secret: nNHJna7snaxYCL62mKLwC5fRFnuEe6ma5RBWANyZElxknyXhM2dyMgCR01oVTP7hPzt69DfRZd0RKJhgfwPN7s
+  redirect_uri: http://localhost/web/auth/callback
+
+auth:
+  cookie_secure: false
+  cookie_same_site: Lax
+  state_expiration_seconds: 600
+  jwt_cache_ttl_seconds: 3600
+  required_scopes: []
+  frontend_redirect_url: http://localhost:3000
+  frontend_allowed_origins:
+    - http://localhost:3000

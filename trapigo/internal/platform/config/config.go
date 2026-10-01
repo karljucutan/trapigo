@@ -7,7 +7,26 @@ import (
 )
 
 type Config struct {
-	HTTP HTTPConfig `yaml:"http"`
+	HTTP     HTTPConfig     `yaml:"http"`
+	Keycloak KeycloakConfig `yaml:"keycloak"`
+	Auth     AuthConfig     `yaml:"auth"`
+}
+
+type KeycloakConfig struct {
+	IssuerURL    string `yaml:"issuer_url"`
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	RedirectURI  string `yaml:"redirect_uri"`
+}
+
+type AuthConfig struct {
+	CookieSecure           bool     `yaml:"cookie_secure"`
+	CookieSameSite         string   `yaml:"cookie_same_site"`
+	StateExpirationSec     int      `yaml:"state_expiration_seconds"`
+	JWTCacheTTLSec         int      `yaml:"jwt_cache_ttl_seconds"`
+	RequiredScopes         []string `yaml:"required_scopes"`
+	FrontendRedirectURL    string   `yaml:"frontend_redirect_url"`
+	FrontendAllowedOrigins []string `yaml:"frontend_allowed_origins"`
 }
 
 type HTTPConfig struct {
@@ -51,8 +70,10 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	expanded := os.ExpandEnv(string(data))
+
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
 		return nil, err
 	}
 
