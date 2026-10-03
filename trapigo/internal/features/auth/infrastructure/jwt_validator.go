@@ -53,8 +53,9 @@ func NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID string, jwksCacheTTL ti
 	if jwksCacheTTL <= 0 {
 		jwksCacheTTL = time.Hour
 	}
+	trimmedIssuerURL := strings.TrimRight(issuerURL, "/")
 	return &JWTValidator{
-		issuerURL:        strings.TrimRight(issuerURL, "/"),
+		issuerURL:        trimmedIssuerURL,
 		clientID:         clientID,
 		jwksCacheTTL:     jwksCacheTTL,
 		httpClient:       httpClient,

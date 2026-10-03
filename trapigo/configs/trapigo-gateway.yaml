@@ -37,7 +37,7 @@ http:
           - url: http://dotnet10aot-order-service:8080
 
 keycloak:
-  issuer_url: http://keycloak:8080/auth/realms/CompanyA
+  issuer_url: http://localhost/auth/realms/CompanyA
   client_id: trapigo-apigateway
   client_secret: nNHJna7snaxYCL62mKLwC5fRFnuEe6ma5RBWANyZElxknyXhM2dyMgCR01oVTP7hPzt69DfRZd0RKJhgfwPN7s
   redirect_uri: http://localhost/web/auth/callback
