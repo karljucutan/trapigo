@@ -33,10 +33,10 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 		return nil, fmt.Errorf("initialize keycloak client: %w", err)
 	}
 
-	jwtValidator := authinfra.NewJWTValidatorWithCacheTTL(
+	jwtValidator := authinfra.NewJWTValidatorWithJWKSCacheTTL(
 		cfg.Keycloak.IssuerURL,
 		cfg.Keycloak.ClientID,
-		time.Duration(cfg.Auth.JWTCacheTTLSec)*time.Second,
+		time.Duration(cfg.Auth.JWKSCacheTTLSec)*time.Second,
 		http.DefaultClient,
 	)
 	cookieManager := authinfra.NewCookieManager(cfg.Auth.CookieSecure, parseSameSite(cfg.Auth.CookieSameSite), "/")

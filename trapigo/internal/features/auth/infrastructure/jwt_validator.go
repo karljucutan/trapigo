@@ -20,14 +20,14 @@ import (
 
 // JWTValidator validates access tokens issued by Keycloak using JWKS.
 type JWTValidator struct {
-	issuerURL  string
-	clientID   string
-	cacheTTL   time.Duration
-	httpClient *http.Client
+	issuerURL    string
+	clientID     string
+	jwksCacheTTL time.Duration
+	httpClient   *http.Client
 
-	mu       sync.RWMutex
-	keys     map[string]jwt.VerificationKey
-	lastSync time.Time
+	mu                sync.RWMutex
+	verificationKeys  map[string]jwt.VerificationKey
+	lastJWKSFetchTime time.Time
 }
 
 type jwksDocument struct {
@@ -43,23 +43,28 @@ type jwk struct {
 }
 
 func NewJWTValidator(issuerURL, clientID string, httpClient *http.Client) *JWTValidator {
-	return NewJWTValidatorWithCacheTTL(issuerURL, clientID, time.Hour, httpClient)
+	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID, time.Hour, httpClient)
 }
 
-func NewJWTValidatorWithCacheTTL(issuerURL, clientID string, cacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
+func NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID string, jwksCacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	if cacheTTL <= 0 {
-		cacheTTL = time.Hour
+	if jwksCacheTTL <= 0 {
+		jwksCacheTTL = time.Hour
 	}
 	return &JWTValidator{
-		issuerURL:  strings.TrimRight(issuerURL, "/"),
-		clientID:   clientID,
-		cacheTTL:   cacheTTL,
-		httpClient: httpClient,
-		keys:       map[string]jwt.VerificationKey{},
+		issuerURL:        strings.TrimRight(issuerURL, "/"),
+		clientID:         clientID,
+		jwksCacheTTL:     jwksCacheTTL,
+		httpClient:       httpClient,
+		verificationKeys: map[string]jwt.VerificationKey{},
 	}
+}
+
+// Deprecated: use NewJWTValidatorWithJWKSCacheTTL.
+func NewJWTValidatorWithCacheTTL(issuerURL, clientID string, cacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
+	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID, cacheTTL, httpClient)
 }
 
 func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domain.Claims, error) {
@@ -94,12 +99,12 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 		if !ok {
 			return nil, domain.ErrInvalidJWT
 		}
-		key, ok := v.lookupKey(kid)
+		key, ok := v.lookupVerificationKey(kid)
 		if !ok {
 			if refreshErr := v.refreshJWKS(ctx, true); refreshErr != nil {
 				return nil, refreshErr
 			}
-			key, ok = v.lookupKey(kid)
+			key, ok = v.lookupVerificationKey(kid)
 			if !ok {
 				return nil, fmt.Errorf("%w: unknown key id %s", domain.ErrInvalidJWT, kid)
 			}
@@ -169,7 +174,7 @@ func (v *JWTValidator) ensureJWKS(ctx context.Context) error {
 
 func (v *JWTValidator) refreshJWKS(ctx context.Context, force bool) error {
 	v.mu.RLock()
-	if !force && len(v.keys) > 0 && time.Since(v.lastSync) < v.cacheTTL {
+	if !force && len(v.verificationKeys) > 0 && time.Since(v.lastJWKSFetchTime) < v.jwksCacheTTL {
 		v.mu.RUnlock()
 		return nil
 	}
@@ -197,7 +202,7 @@ func (v *JWTValidator) refreshJWKS(ctx context.Context, force bool) error {
 		return fmt.Errorf("%w: decode JWKS: %v", domain.ErrKeycloakConnection, err)
 	}
 
-	keys := map[string]jwt.VerificationKey{}
+	verificationKeys := map[string]jwt.VerificationKey{}
 	for _, key := range doc.Keys {
 		if key.Kty != "RSA" || key.N == "" || key.E == "" {
 			continue
@@ -206,23 +211,23 @@ func (v *JWTValidator) refreshJWKS(ctx context.Context, force bool) error {
 		if err != nil {
 			continue
 		}
-		keys[key.Kid] = rsaKey
+		verificationKeys[key.Kid] = rsaKey
 	}
-	if len(keys) == 0 {
+	if len(verificationKeys) == 0 {
 		return fmt.Errorf("%w: no RSA keys found in JWKS", domain.ErrKeycloakConnection)
 	}
 
 	v.mu.Lock()
-	v.keys = keys
-	v.lastSync = time.Now()
+	v.verificationKeys = verificationKeys
+	v.lastJWKSFetchTime = time.Now()
 	v.mu.Unlock()
 	return nil
 }
 
-func (v *JWTValidator) lookupKey(kid string) (jwt.VerificationKey, bool) {
+func (v *JWTValidator) lookupVerificationKey(kid string) (jwt.VerificationKey, bool) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	key, ok := v.keys[kid]
+	key, ok := v.verificationKeys[kid]
 	return key, ok
 }
 
@@ -258,7 +263,7 @@ func (v *JWTValidator) ParseTokenString(tokenString string) (*jwt.Token, error) 
 		if !ok {
 			return nil, errors.New("missing kid")
 		}
-		key, ok := v.lookupKey(kid)
+		key, ok := v.lookupVerificationKey(kid)
 		if !ok {
 			return nil, fmt.Errorf("unknown key id %s", kid)
 		}

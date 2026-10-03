@@ -23,7 +23,7 @@ type AuthConfig struct {
 	CookieSecure           bool     `yaml:"cookie_secure"`
 	CookieSameSite         string   `yaml:"cookie_same_site"`
 	StateExpirationSec     int      `yaml:"state_expiration_seconds"`
-	JWTCacheTTLSec         int      `yaml:"jwt_cache_ttl_seconds"`
+	JWKSCacheTTLSec        int      `yaml:"jwt_cache_ttl_seconds"`
 	RequiredScopes         []string `yaml:"required_scopes"`
 	FrontendRedirectURL    string   `yaml:"frontend_redirect_url"`
 	FrontendAllowedOrigins []string `yaml:"frontend_allowed_origins"`

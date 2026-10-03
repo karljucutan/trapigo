@@ -19,7 +19,7 @@ import (
 func TestJWTValidator_AllowsMissingNotBefore(t *testing.T) {
 	privateKey, kid, serverURL, client := newJWKSValidatorTestServer(t, nil)
 
-	validator := NewJWTValidatorWithCacheTTL(serverURL, "trapigo", time.Hour, client)
+	validator := NewJWTValidatorWithJWKSCacheTTL(serverURL, "trapigo", time.Hour, client)
 	token := buildValidatorToken(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil)
 
 	claims, err := validator.Validate(context.Background(), token)
@@ -50,7 +50,7 @@ func TestJWTValidator_RefreshesJWKSOnUnknownKeyID(t *testing.T) {
 		return jwksDocument{Keys: []jwk{publicJWKFromKey(t, "new-key", &newKey.PublicKey)}}
 	})
 
-	validator := NewJWTValidatorWithCacheTTL(serverURL, "trapigo", time.Hour, client)
+	validator := NewJWTValidatorWithJWKSCacheTTL(serverURL, "trapigo", time.Hour, client)
 	primeToken := buildValidatorToken(t, serverURL, "trapigo", "old-key", oldKey, time.Now().Add(5*time.Minute), timePtr(time.Now().Add(-time.Minute)))
 	if _, err := validator.Validate(context.Background(), primeToken); err != nil {
 		t.Fatalf("prime validation failed: %v", err)
@@ -98,7 +98,7 @@ func newJWKSValidatorTestServer(t *testing.T, docForCall func(call int64) jwksDo
 func TestJWTValidator_ExtractsKeycloakExtrasFromStandardClaims(t *testing.T) {
 	privateKey, kid, serverURL, client := newJWKSValidatorTestServer(t, nil)
 
-	validator := NewJWTValidatorWithCacheTTL(serverURL, "trapigo", time.Hour, client)
+	validator := NewJWTValidatorWithJWKSCacheTTL(serverURL, "trapigo", time.Hour, client)
 	token := buildValidatorTokenWithExtras(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
 		"email":              "alice@example.com",
 		"preferred_username": "alice",
