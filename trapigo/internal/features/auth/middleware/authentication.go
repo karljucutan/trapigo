@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -24,7 +23,6 @@ type AuthenticationMiddlewareConfig struct {
 	CookieManager  *infrastructure.CookieManager
 	RefreshToken   RefreshTokenFunc
 	RequiredScopes []string
-	AllowedOrigins []string
 }
 
 type authClaimsKey struct{}
@@ -44,10 +42,6 @@ func NewAuthenticationMiddleware(cfg AuthenticationMiddlewareConfig) func(http.H
 			claims, accessToken, method, err := authenticateRequest(rw, req, cfg)
 			if err != nil {
 				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-				return
-			}
-			if method == authMethodCookie && requiresCSRFMitigation(req.Method) && !isAllowedOrigin(req.Header.Get("Origin"), cfg.AllowedOrigins) {
-				http.Error(rw, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}
 			ctx := context.WithValue(req.Context(), authClaimsKey{}, claims)
@@ -141,6 +135,7 @@ func authenticateRequest(rw http.ResponseWriter, req *http.Request, cfg Authenti
 	return nil, "", "", domain.ErrInvalidJWT
 }
 
+// TODO: Move this to separate CSRF anti-forgery middleware.
 func requiresCSRFMitigation(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
@@ -148,45 +143,6 @@ func requiresCSRFMitigation(method string) bool {
 	default:
 		return true
 	}
-}
-
-func isAllowedOrigin(origin string, allowedOrigins []string) bool {
-	normalized := normalizeOrigins(allowedOrigins)
-	if len(normalized) == 0 {
-		return true
-	}
-	origin = strings.TrimSpace(origin)
-	if origin == "" {
-		return false
-	}
-	for _, candidate := range normalized {
-		if origin == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeOrigins(origins []string) []string {
-	normalized := make([]string, 0, len(origins))
-	seen := make(map[string]struct{}, len(origins))
-	for _, raw := range origins {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		parsed, err := url.Parse(raw)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			continue
-		}
-		value := parsed.Scheme + "://" + parsed.Host
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		normalized = append(normalized, value)
-	}
-	return normalized
 }
 
 func requestBearerToken(req *http.Request) string {

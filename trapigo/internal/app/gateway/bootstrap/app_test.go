@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
 	middleware "github.com/karljucutan/trapigo/trapigo/internal/features/middleware/transporthttp"
 )
 
@@ -71,9 +72,9 @@ func TestSetDefaultLoggerUsesConfiguredLogLevel(t *testing.T) {
 }
 
 func TestParseAllowedOriginsFallsBackToFrontendOrigin(t *testing.T) {
-	origins := parseAllowedOrigins(nil, "http://localhost:3000/path")
-	if len(origins) != 1 || origins[0] != "http://localhost:3000/path" {
-		t.Fatalf("unexpected origins: %#v", origins)
+	allowedOrigins := origininfra.ParseAllowedOrigins(nil, "http://localhost:3000/path")
+	if len(allowedOrigins.List()) != 1 || allowedOrigins.List()[0] != "http://localhost:3000" {
+		t.Fatalf("unexpected origins: %#v", allowedOrigins.List())
 	}
 }
 

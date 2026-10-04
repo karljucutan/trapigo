@@ -1,15 +1,17 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	HTTP     HTTPConfig     `yaml:"http"`
-	Keycloak KeycloakConfig `yaml:"keycloak"`
-	Auth     AuthConfig     `yaml:"auth"`
+	HTTP          HTTPConfig            `yaml:"http"`
+	Keycloak      KeycloakConfig        `yaml:"keycloak"`
+	Auth          AuthConfig            `yaml:"auth"`
+	AllowedOrigins AllowedOriginsConfig `yaml:"allowed_origins"`
 }
 
 type KeycloakConfig struct {
@@ -20,13 +22,43 @@ type KeycloakConfig struct {
 }
 
 type AuthConfig struct {
-	CookieSecure           bool     `yaml:"cookie_secure"`
-	CookieSameSite         string   `yaml:"cookie_same_site"`
-	StateExpirationSec     int      `yaml:"state_expiration_seconds"`
-	JWKSCacheTTLSec        int      `yaml:"jwt_cache_ttl_seconds"`
-	RequiredScopes         []string `yaml:"required_scopes"`
-	FrontendRedirectURL    string   `yaml:"frontend_redirect_url"`
-	FrontendAllowedOrigins []string `yaml:"frontend_allowed_origins"`
+	CookieSecure        bool     `yaml:"cookie_secure"`
+	CookieSameSite      string   `yaml:"cookie_same_site"`
+	StateExpirationSec  int      `yaml:"state_expiration_seconds"`
+	JWKSCacheTTLSec     int      `yaml:"jwt_cache_ttl_seconds"`
+	RequiredScopes      []string `yaml:"required_scopes"`
+	FrontendRedirectURL string   `yaml:"frontend_redirect_url"`
+}
+
+type AllowedOriginsConfig struct {
+	Values []string `yaml:"values"`
+}
+
+func (a AllowedOriginsConfig) List() []string {
+	if a.Values == nil {
+		return nil
+	}
+	values := make([]string, len(a.Values))
+	copy(values, a.Values)
+	return values
+}
+
+func (a *AllowedOriginsConfig) UnmarshalYAML(value *yaml.Node) error {
+	var direct []string
+	if err := value.Decode(&direct); err == nil {
+		a.Values = direct
+		return nil
+	}
+
+	var structured struct {
+		Values []string `yaml:"values"`
+	}
+	if err := value.Decode(&structured); err == nil {
+		a.Values = structured.Values
+		return nil
+	}
+
+	return fmt.Errorf("invalid frontend_allowed_origins format: expected a list or { values: [...] }")
 }
 
 type HTTPConfig struct {

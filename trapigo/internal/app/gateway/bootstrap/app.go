@@ -35,7 +35,9 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
-	gatewayHttpHandler := buildGatewayHttpHandler(loadBalancer, routeProxies, auth, cfg.HTTP.RateLimit)
+	originMiddleware := buildOriginMiddlewareComponents(&cfg.AllowedOrigins, cfg.Auth.FrontendRedirectURL)
+
+	gatewayHttpHandler := buildGatewayHttpHandler(loadBalancer, routeProxies, auth, originMiddleware, cfg.HTTP.RateLimit)
 	adminHttpHandler := buildAdminHttpHandler()
 
 	return &App{

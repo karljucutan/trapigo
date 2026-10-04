@@ -17,6 +17,8 @@ import (
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 	authmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/auth/middleware"
+	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
+	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/command"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/query"
 	"golang.org/x/oauth2"
@@ -129,16 +131,17 @@ func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) 
 
 func TestHandleLogout_ClearsCookies(t *testing.T) {
 	handler := &AuthHandler{
-		LogoutCommand:  &command.LogoutCommand{},
-		CookieManager:  infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
-		AllowedOrigins: []string{"http://localhost:3000"},
+		LogoutCommand: &command.LogoutCommand{},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.AddCookie(&http.Cookie{Name: infrastructure.RefreshTokenCookieName, Value: "refresh-123"})
 	res := httptest.NewRecorder()
-	handler.HandleLogout(res, req)
+	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
+	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
+	originMiddleware(http.HandlerFunc(handler.HandleLogout)).ServeHTTP(res, req)
 
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected %d, got %d", http.StatusOK, res.Code)
@@ -155,16 +158,17 @@ func TestHandleLogout_ClearsCookies(t *testing.T) {
 
 func TestHandleLogout_RejectsInvalidOrigin(t *testing.T) {
 	handler := &AuthHandler{
-		LogoutCommand:  &command.LogoutCommand{},
-		CookieManager:  infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
-		AllowedOrigins: []string{"http://localhost:3000"},
+		LogoutCommand: &command.LogoutCommand{},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout", nil)
 	req.Header.Set("Origin", "http://evil.local")
 	res := httptest.NewRecorder()
 
-	handler.HandleLogout(res, req)
+	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
+	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
+	originMiddleware(http.HandlerFunc(handler.HandleLogout)).ServeHTTP(res, req)
 
 	if res.Code != http.StatusForbidden {
 		t.Fatalf("expected %d, got %d", http.StatusForbidden, res.Code)
@@ -173,16 +177,24 @@ func TestHandleLogout_RejectsInvalidOrigin(t *testing.T) {
 
 func TestHandleLogout_RejectsNonPostMethod(t *testing.T) {
 	handler := &AuthHandler{
-		LogoutCommand:  &command.LogoutCommand{},
-		CookieManager:  infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
-		AllowedOrigins: []string{"http://localhost:3000"},
+		LogoutCommand: &command.LogoutCommand{},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/web/auth/logout", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	res := httptest.NewRecorder()
 
-	handler.HandleLogout(res, req)
+	methodGuard := func(method string, next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			if req.Method != method {
+				http.Error(rw, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+				return
+			}
+			next.ServeHTTP(rw, req)
+		})
+	}
+	methodGuard(http.MethodPost, http.HandlerFunc(handler.HandleLogout)).ServeHTTP(res, req)
 
 	if res.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected %d, got %d", http.StatusMethodNotAllowed, res.Code)

@@ -65,7 +65,7 @@ func buildLoadBalancer(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[str
 	return loadBalancer, routeProxies, nil
 }
 
-func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map[string]*routeProxy, auth *authComponents, rateLimitCfg *config.RateLimit) http.Handler {
+func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map[string]*routeProxy, auth *authComponents, originMiddleware *originMiddlewareComponents, rateLimitCfg *config.RateLimit) http.Handler {
 	proxyHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		var matchedRoute *domain.Router
 		for _, route := range loadBalancer.Routers {
@@ -139,12 +139,12 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 	})
 
 	gatewayMux := http.NewServeMux()
-	gatewayMux.Handle("/web/auth/login", http.HandlerFunc(auth.handler.HandleLogin))
-	gatewayMux.Handle("/web/auth/callback", http.HandlerFunc(auth.handler.HandleCallback))
-	gatewayMux.Handle("/web/auth/logout", http.HandlerFunc(auth.handler.HandleLogout))
-	gatewayMux.Handle("/web/auth/me", auth.middleware(http.HandlerFunc(auth.handler.HandleMe)))
-	gatewayMux.Handle("/api/", auth.middleware(authgateway.AddAuthorizationHeader(proxyHandler)))
-	gatewayMux.Handle("/", proxyHandler)
+	gatewayMux.Handle("POST /web/auth/login", http.HandlerFunc(auth.handler.HandleLogin))
+	gatewayMux.Handle("GET /web/auth/callback", http.HandlerFunc(auth.handler.HandleCallback))
+	gatewayMux.Handle("POST /web/auth/logout", originMiddleware.middleware(http.HandlerFunc(auth.handler.HandleLogout)))
+	gatewayMux.Handle("GET /web/auth/me", auth.middleware(http.HandlerFunc(auth.handler.HandleMe)))
+	gatewayMux.Handle("/auth/", proxyHandler)
+	gatewayMux.Handle("/", originMiddleware.middleware(auth.middleware(authgateway.AddAuthorizationHeader(proxyHandler))))
 
 	rateLimitPolicy := middleware.NewRateLimitPolicy(rateLimitCfg)
 	return middleware.LoggingMiddleware(middleware.RateLimitMiddleware(rateLimitPolicy)(gatewayMux))

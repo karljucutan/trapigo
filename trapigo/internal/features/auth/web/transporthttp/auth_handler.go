@@ -3,8 +3,6 @@ package transporthttp
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
@@ -20,7 +18,6 @@ type AuthHandler struct {
 	MeQuery         *query.GetCurrentUserQuery
 	CookieManager   *infrastructure.CookieManager
 	FrontendURL     string
-	AllowedOrigins  []string
 }
 
 func (h *AuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) {
@@ -59,15 +56,6 @@ func (h *AuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Request) 
 }
 
 func (h *AuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !h.isAllowedOrigin(req.Header.Get("Origin")) {
-		http.Error(rw, "forbidden", http.StatusForbidden)
-		return
-	}
-
 	refreshToken, _ := h.CookieManager.ExtractToken(req, infrastructure.RefreshTokenCookieName)
 	if err := h.LogoutCommand.Execute(req.Context(), refreshToken); err != nil {
 		http.Error(rw, "logout failed", http.StatusUnauthorized)
@@ -92,43 +80,4 @@ func (h *AuthHandler) HandleMe(rw http.ResponseWriter, req *http.Request) {
 	if err := json.NewEncoder(rw).Encode(currentUser); err != nil {
 		http.Error(rw, "failed to encode response", http.StatusInternalServerError)
 	}
-}
-
-func (h *AuthHandler) isAllowedOrigin(origin string) bool {
-	allowed := normalizeOrigins(h.AllowedOrigins)
-	if len(allowed) == 0 {
-		return true
-	}
-	origin = strings.TrimSpace(origin)
-	if origin == "" {
-		return false
-	}
-	for _, candidate := range allowed {
-		if origin == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeOrigins(origins []string) []string {
-	normalized := make([]string, 0, len(origins))
-	seen := map[string]struct{}{}
-	for _, raw := range origins {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		u, err := url.Parse(raw)
-		if err != nil || u.Scheme == "" || u.Host == "" {
-			continue
-		}
-		value := u.Scheme + "://" + u.Host
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		normalized = append(normalized, value)
-	}
-	return normalized
 }

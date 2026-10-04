@@ -42,7 +42,6 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 	cookieManager := authinfra.NewCookieManager(cfg.Auth.CookieSecure, parseSameSite(cfg.Auth.CookieSameSite), "/")
 	stateTTL := time.Duration(cfg.Auth.StateExpirationSec) * time.Second
 	stateStore := authinfra.NewInMemoryOAuthStateStore(stateTTL)
-	allowedOrigins := parseAllowedOrigins(cfg.Auth.FrontendAllowedOrigins, cfg.Auth.FrontendRedirectURL)
 
 	loginCommand := &webcommand.LoginCommand{
 		KeycloakClient: keycloakClient,
@@ -63,13 +62,11 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 		MeQuery:         meQuery,
 		CookieManager:   cookieManager,
 		FrontendURL:     cfg.Auth.FrontendRedirectURL,
-		AllowedOrigins:  allowedOrigins,
 	}
 
 	middleware := authmiddleware.NewAuthenticationMiddleware(authmiddleware.AuthenticationMiddlewareConfig{
 		Validator:      jwtValidator,
 		CookieManager:  cookieManager,
-		AllowedOrigins: allowedOrigins,
 		RequiredScopes: cfg.Auth.RequiredScopes,
 		RefreshToken: func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 			return keycloakClient.RefreshToken(ctx, refreshToken)
@@ -93,24 +90,4 @@ func parseSameSite(raw string) http.SameSite {
 	default:
 		return http.SameSiteLaxMode
 	}
-}
-
-func parseAllowedOrigins(raw []string, fallbackFrontendURL string) []string {
-	values := []string{}
-	for _, origin := range raw {
-		trimmed := strings.TrimSpace(origin)
-		if trimmed == "" {
-			continue
-		}
-		values = append(values, trimmed)
-	}
-
-	if len(values) == 0 {
-		fallback := strings.TrimSpace(fallbackFrontendURL)
-		if fallback != "" {
-			values = append(values, fallback)
-		}
-	}
-
-	return values
 }

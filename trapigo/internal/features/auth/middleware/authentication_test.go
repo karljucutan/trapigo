@@ -16,6 +16,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
+	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
+	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	"golang.org/x/oauth2"
 )
 
@@ -167,20 +169,21 @@ func TestAuthenticationMiddleware_RejectsUnsafeCookieRequestFromInvalidOrigin(t 
 	cookieManager := infrastructure.NewCookieManager(true, http.SameSiteLaxMode, "/")
 	token := buildSignedToken(t, issuer, "trapigo", "user-123", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute))
 
-	middleware := NewAuthenticationMiddleware(AuthenticationMiddlewareConfig{
-		Validator:      validator,
-		CookieManager:  cookieManager,
-		AllowedOrigins: []string{"http://localhost:3000"},
+	authMiddleware := NewAuthenticationMiddleware(AuthenticationMiddlewareConfig{
+		Validator:     validator,
+		CookieManager: cookieManager,
 	})
+	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
+	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/orders", nil)
 	req.Header.Set("Origin", "http://evil.local")
 	req.AddCookie(cookieManager.AccessTokenCookie(token, time.Minute))
 	res := httptest.NewRecorder()
 
-	middleware(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	originMiddleware(authMiddleware(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		t.Fatal("next handler should not run")
-	})).ServeHTTP(res, req)
+	}))).ServeHTTP(res, req)
 
 	if res.Code != http.StatusForbidden {
 		t.Fatalf("expected %d, got %d", http.StatusForbidden, res.Code)
@@ -192,8 +195,7 @@ func TestAuthenticationMiddleware_AllowsUnsafeBearerRequestWithoutOriginCheck(t 
 	token := buildSignedToken(t, issuer, "trapigo", "user-123", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute))
 
 	middleware := NewAuthenticationMiddleware(AuthenticationMiddlewareConfig{
-		Validator:      validator,
-		AllowedOrigins: []string{"http://localhost:3000"},
+		Validator: validator,
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/orders", nil)

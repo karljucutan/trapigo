@@ -49,5 +49,7 @@ auth:
   jwt_cache_ttl_seconds: 3600
   required_scopes: []
   frontend_redirect_url: http://localhost:3000
-  frontend_allowed_origins:
+
+allowed_origins:
+  values:
     - http://localhost:3000
