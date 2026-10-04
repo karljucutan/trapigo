@@ -18,8 +18,8 @@ import (
 )
 
 type authComponents struct {
-	handler    *webtransport.AuthHandler
-	middleware func(http.Handler) http.Handler
+	webAuthHandler *webtransport.WebAuthHandler
+	middleware     func(http.Handler) http.Handler
 }
 
 func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
@@ -55,7 +55,7 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 	}
 	logoutCommand := &webcommand.LogoutCommand{CookieManager: cookieManager}
 	meQuery := &webquery.GetCurrentUserQuery{}
-	handler := &webtransport.AuthHandler{
+	handler := &webtransport.WebAuthHandler{
 		LoginCommand:    loginCommand,
 		CallbackCommand: callbackCommand,
 		LogoutCommand:   logoutCommand,
@@ -74,8 +74,8 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 	})
 
 	return &authComponents{
-		handler:    handler,
-		middleware: middleware,
+		webAuthHandler: handler,
+		middleware:     middleware,
 	}, nil
 }
 

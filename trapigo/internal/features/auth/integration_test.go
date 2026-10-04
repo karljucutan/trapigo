@@ -20,11 +20,11 @@ import (
 	authgateway "github.com/karljucutan/trapigo/trapigo/internal/features/auth/gateway"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 	authmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/auth/middleware"
-	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
-	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	webcommand "github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/command"
 	webquery "github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/query"
 	webtransport "github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/transporthttp"
+	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
+	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	"golang.org/x/oauth2"
 )
 
@@ -215,7 +215,7 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 		StateStore: stateStore,
 		Validator:  validator,
 	}
-	handler := &webtransport.AuthHandler{
+	handler := &webtransport.WebAuthHandler{
 		LoginCommand:    loginCommand,
 		CallbackCommand: callbackCommand,
 		LogoutCommand:   &webcommand.LogoutCommand{},
@@ -270,7 +270,7 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 		logoutReq.AddCookie(c)
 	}
 	logoutRes := httptest.NewRecorder()
-	
+
 	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
 	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
 	originMiddleware(http.HandlerFunc(handler.HandleLogout)).ServeHTTP(logoutRes, logoutReq)

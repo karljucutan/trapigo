@@ -135,16 +135,6 @@ func authenticateRequest(rw http.ResponseWriter, req *http.Request, cfg Authenti
 	return nil, "", "", domain.ErrInvalidJWT
 }
 
-// TODO: Move this to separate CSRF anti-forgery middleware.
-func requiresCSRFMitigation(method string) bool {
-	switch method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-		return false
-	default:
-		return true
-	}
-}
-
 func requestBearerToken(req *http.Request) string {
 	header := req.Header.Get("Authorization")
 	if strings.TrimSpace(header) == "" {

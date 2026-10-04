@@ -11,7 +11,7 @@ import (
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/query"
 )
 
-type AuthHandler struct {
+type WebAuthHandler struct {
 	LoginCommand    *command.LoginCommand
 	CallbackCommand *command.CallbackCommand
 	LogoutCommand   *command.LogoutCommand
@@ -20,7 +20,7 @@ type AuthHandler struct {
 	FrontendURL     string
 }
 
-func (h *AuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) {
+func (h *WebAuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) {
 	redirectURL, err := h.LoginCommand.Execute(req.Context())
 	if err != nil {
 		http.Error(rw, "login initialization failed", http.StatusInternalServerError)
@@ -29,7 +29,7 @@ func (h *AuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) {
 	http.Redirect(rw, req, redirectURL, http.StatusFound)
 }
 
-func (h *AuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Request) {
+func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Request) {
 	code := req.URL.Query().Get("code")
 	state := req.URL.Query().Get("state")
 
@@ -55,7 +55,7 @@ func (h *AuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Request) 
 	http.Redirect(rw, req, target, http.StatusFound)
 }
 
-func (h *AuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request) {
+func (h *WebAuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request) {
 	refreshToken, _ := h.CookieManager.ExtractToken(req, infrastructure.RefreshTokenCookieName)
 	if err := h.LogoutCommand.Execute(req.Context(), refreshToken); err != nil {
 		http.Error(rw, "logout failed", http.StatusUnauthorized)
@@ -68,7 +68,7 @@ func (h *AuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request) {
 	_, _ = rw.Write([]byte(`{"status":"logged_out"}`))
 }
 
-func (h *AuthHandler) HandleMe(rw http.ResponseWriter, req *http.Request) {
+func (h *WebAuthHandler) HandleMe(rw http.ResponseWriter, req *http.Request) {
 	claims, ok := authmiddleware.ClaimsFromContext(req.Context())
 	if !ok || claims == nil {
 		http.Error(rw, "unauthorized", http.StatusUnauthorized)

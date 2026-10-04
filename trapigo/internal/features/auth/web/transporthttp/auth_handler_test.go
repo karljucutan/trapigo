@@ -17,10 +17,10 @@ import (
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 	authmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/auth/middleware"
-	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
-	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/command"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/web/application/query"
+	origininfra "github.com/karljucutan/trapigo/trapigo/internal/features/origin/infrastructure"
+	originmiddleware "github.com/karljucutan/trapigo/trapigo/internal/features/origin/middleware"
 	"golang.org/x/oauth2"
 )
 
@@ -30,7 +30,7 @@ func TestHandleLogin_RedirectsToKeycloak(t *testing.T) {
 		KeycloakClient: loginClientStub{authURL: "https://id.example.com/login"},
 		StateStore:     stateStore,
 	}
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		LoginCommand:  loginCommand,
 		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -69,7 +69,7 @@ func TestHandleCallback_WithValidCodeAndState_SetsCookiesAndRedirects(t *testing
 		Validator:  validator,
 	}
 	cookieManager := infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		CallbackCommand: callbackCommand,
 		CookieManager:   cookieManager,
 		FrontendURL:     "http://localhost:3000",
@@ -108,7 +108,7 @@ func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) 
 		StateStore:     stateStore,
 		Validator:      validator,
 	}
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		CallbackCommand: callbackCommand,
 		CookieManager:   infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -130,7 +130,7 @@ func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) 
 }
 
 func TestHandleLogout_ClearsCookies(t *testing.T) {
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		LogoutCommand: &command.LogoutCommand{},
 		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -157,7 +157,7 @@ func TestHandleLogout_ClearsCookies(t *testing.T) {
 }
 
 func TestHandleLogout_RejectsInvalidOrigin(t *testing.T) {
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		LogoutCommand: &command.LogoutCommand{},
 		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -176,7 +176,7 @@ func TestHandleLogout_RejectsInvalidOrigin(t *testing.T) {
 }
 
 func TestHandleLogout_RejectsNonPostMethod(t *testing.T) {
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		LogoutCommand: &command.LogoutCommand{},
 		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -202,7 +202,7 @@ func TestHandleLogout_RejectsNonPostMethod(t *testing.T) {
 }
 
 func TestHandleCallback_DoesNotLeakSensitiveErrors(t *testing.T) {
-	handler := &AuthHandler{
+	handler := &WebAuthHandler{
 		CallbackCommand: &command.CallbackCommand{},
 		CookieManager:   infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
 	}
@@ -222,7 +222,7 @@ func TestHandleCallback_DoesNotLeakSensitiveErrors(t *testing.T) {
 }
 
 func TestHandleMe_ReturnsAuthenticatedUserAnd401WhenMissing(t *testing.T) {
-	handler := &AuthHandler{MeQuery: &query.GetCurrentUserQuery{}}
+	handler := &WebAuthHandler{MeQuery: &query.GetCurrentUserQuery{}}
 
 	validatorClaims := &domain.Claims{Subject: "u1", Username: "alice", Issuer: "issuer"}
 	authn := authmiddleware.NewAuthenticationMiddleware(authmiddleware.AuthenticationMiddlewareConfig{
