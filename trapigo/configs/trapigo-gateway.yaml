@@ -29,7 +29,13 @@ http:
     go-order-service:
       load-balancer:
         servers:
-          - url: http://go-order-service:8080
+          # Docker Internal DNS (Leverages Docker's built-in DNS round-robin)
+          # - url: http://go-order-service:8080
+          
+          # Custom Gateway Load Balancing (Bypasses Docker DNS to run our own Round-Robin)
+          - url: http://trapigo-monorepo-go-order-service-1:8080
+          - url: http://trapigo-monorepo-go-order-service-2:8080
+          - url: http://trapigo-monorepo-go-order-service-3:8080
 
     dotnet10aot-order-service:
       load-balancer:

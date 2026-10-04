@@ -93,6 +93,9 @@ services:
     depends_on:
       trapigo-services-db:
         condition: service_healthy
+    deploy:
+      mode: replicated
+      replicas: 3
 
   # Example: rename to actual proj name.
   # go-crud-app:
