@@ -140,7 +140,7 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 
 	gatewayMux := http.NewServeMux()
 	// web auth routes
-	gatewayMux.Handle("POST /web/auth/login", http.HandlerFunc(auth.webAuthHandler.HandleLogin))
+	gatewayMux.Handle("GET /web/auth/login", http.HandlerFunc(auth.webAuthHandler.HandleLogin))
 	gatewayMux.Handle("GET /web/auth/callback", http.HandlerFunc(auth.webAuthHandler.HandleCallback))
 	gatewayMux.Handle("POST /web/auth/logout", originMiddleware.middleware(http.HandlerFunc(auth.webAuthHandler.HandleLogout)))
 	gatewayMux.Handle("GET /web/auth/me", auth.middleware(http.HandlerFunc(auth.webAuthHandler.HandleMe)))
