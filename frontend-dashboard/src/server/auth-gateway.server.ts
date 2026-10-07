@@ -119,3 +119,34 @@ export async function fetchGatewaySession(
     cookies: rotatedCookies,
   }
 }
+
+export async function callGatewayLogout(
+  cookieHeader: string,
+  config: AuthConfig,
+  request: typeof fetch = fetch
+): Promise<{ cookies: string[] }> {
+  const cookies = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie))
+    .join("; ")
+  const response = await request(
+    new URL("/web/auth/logout", config.gatewayOrigin),
+    {
+      method: "POST",
+      headers: cookies ? { Cookie: cookies } : {},
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+    }
+  )
+  const rotatedCookies = response.headers
+    .getSetCookie()
+    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie))
+
+  if (!response.ok) {
+    throw new Error(`Logout failed with status ${response.status}`)
+  }
+
+  return { cookies: rotatedCookies }
+}

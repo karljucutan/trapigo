@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router"
 import { getRouteSession } from "@/server/auth.functions"
 import { Button } from "@/components/ui/button"
+import { AppNav } from "@/components/app-nav"
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
@@ -18,9 +19,22 @@ export const Route = createFileRoute("/_authenticated")({
     }
     return { user }
   },
-  component: Outlet,
+  component: AuthLayout,
   errorComponent: AuthError,
 })
+
+function AuthLayout() {
+  const { user } = Route.useRouteContext()
+
+  return (
+    <div className="flex min-h-svh flex-col">
+      <AppNav user={user} />
+      <main className="flex-1">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
 
 function AuthError({ reset }: { reset: () => void }) {
   const router = useRouter()

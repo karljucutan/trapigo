@@ -1,6 +1,6 @@
-import { createMiddleware, createServerFn } from "@tanstack/react-start"
-import { setResponseStatus } from "@tanstack/react-start/server"
-import { getAuthConfig, loginURL } from "./auth-gateway.server"
+import { createServerFn, redirect } from "@tanstack/react-start"
+import { getRequestHeader, setResponseHeader, getResponseHeaders } from "@tanstack/react-start/server"
+import { getAuthConfig, loginURL, callGatewayLogout } from "./auth-gateway.server"
 import { getCurrentUser } from "./auth.server"
 
 export const getRouteSession = createServerFn({ method: "POST" })
@@ -14,4 +14,20 @@ export const getRouteSession = createServerFn({ method: "POST" })
     const loginHref = loginURL(data, getAuthConfig())
     const user = await getCurrentUser()
     return { user, loginHref }
+  })
+
+export const handleLogout = createServerFn({ method: "POST" })
+  .handler(async () => {
+    const cookieHeader = getRequestHeader("cookie") ?? ""
+    const { cookies } = await callGatewayLogout(cookieHeader, getAuthConfig())
+    
+    setResponseHeader("Cache-Control", "private, no-store")
+    setResponseHeader("Vary", "Cookie")
+    
+    // Set logout cookies on response
+    for (const cookie of cookies) {
+      getResponseHeaders().append("Set-Cookie", cookie)
+    }
+    
+    throw redirect({ href: "/" })
   })
