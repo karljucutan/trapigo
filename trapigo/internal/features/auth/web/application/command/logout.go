@@ -4,21 +4,18 @@ import (
 	"context"
 	"strings"
 
+	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/application"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 )
 
-type RefreshTokenRevoker interface {
-	RevokeRefreshToken(ctx context.Context, refreshToken string) error
-}
-
 type LogoutCommand struct {
-	CookieManager *infrastructure.CookieManager
-	Revoker       RefreshTokenRevoker
+	CookieManager    *infrastructure.CookieManager
+	IdentityProvider application.IdentityProvider
 }
 
 func (c *LogoutCommand) Execute(ctx context.Context, refreshToken string) error {
-	if c.Revoker != nil && strings.TrimSpace(refreshToken) != "" {
-		return c.Revoker.RevokeRefreshToken(ctx, refreshToken)
+	if c.IdentityProvider != nil && strings.TrimSpace(refreshToken) != "" {
+		return c.IdentityProvider.EndSession(ctx, refreshToken)
 	}
 	return nil
 }

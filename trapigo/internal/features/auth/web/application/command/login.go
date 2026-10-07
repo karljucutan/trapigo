@@ -7,27 +7,24 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/application"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 	"golang.org/x/oauth2"
 )
-
-type LoginKeycloakClient interface {
-	BuildAuthorizationURL(ctx context.Context, params infrastructure.AuthorizationURLParams) (string, error)
-}
 
 type LoginStateStore interface {
 	Save(ctx context.Context, state *domain.OAuthState) error
 }
 
 type LoginCommand struct {
-	KeycloakClient LoginKeycloakClient
-	StateStore     LoginStateStore
-	StateTTL       time.Duration
+	IdentityProvider application.IdentityProvider
+	StateStore       LoginStateStore
+	StateTTL         time.Duration
 }
 
 func (c *LoginCommand) Execute(ctx context.Context, returnURL string) (string, error) {
-	if c.KeycloakClient == nil || c.StateStore == nil {
+	if c.IdentityProvider == nil || c.StateStore == nil {
 		return "", fmt.Errorf("login command misconfigured")
 	}
 
@@ -53,7 +50,7 @@ func (c *LoginCommand) Execute(ctx context.Context, returnURL string) (string, e
 		return "", err
 	}
 
-	redirectURL, err := c.KeycloakClient.BuildAuthorizationURL(ctx, infrastructure.AuthorizationURLParams{
+	redirectURL, err := c.IdentityProvider.BuildAuthorizationURL(ctx, infrastructure.AuthorizationURLParams{
 		State:         state,
 		Nonce:         nonce,
 		CodeChallenge: codeChallenge,

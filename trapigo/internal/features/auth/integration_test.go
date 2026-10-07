@@ -203,11 +203,11 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 	cookieManager := infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
 
 	loginCommand := &webcommand.LoginCommand{
-		KeycloakClient: browserLoginClientStub{authURL: "https://keycloak.example.com/auth"},
-		StateStore:     stateStore,
+		IdentityProvider: browserLoginClientStub{authURL: "https://keycloak.example.com/auth"},
+		StateStore:       stateStore,
 	}
 	callbackCommand := &webcommand.CallbackCommand{
-		KeycloakClient: browserCallbackClientStub{token: &oauth2.Token{
+		IdentityProvider: browserCallbackClientStub{token: &oauth2.Token{
 			AccessToken:  buildToken(t, issuer, "trapigo", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-xyz",
 			Expiry:       time.Now().Add(5 * time.Minute),
@@ -234,7 +234,7 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 	callbackReq := httptest.NewRequest(http.MethodGet, "/web/auth/callback?code=ok&state=s1", nil)
 	callbackRes := httptest.NewRecorder()
 	handler.CallbackCommand = &webcommand.CallbackCommand{
-		KeycloakClient: browserCallbackClientStub{token: &oauth2.Token{
+		IdentityProvider: browserCallbackClientStub{token: &oauth2.Token{
 			AccessToken:  buildToken(t, issuer, "trapigo", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-xyz",
 			Expiry:       time.Now().Add(5 * time.Minute),
@@ -287,12 +287,28 @@ func (s browserLoginClientStub) BuildAuthorizationURL(ctx context.Context, param
 	return s.authURL, nil
 }
 
+func (browserLoginClientStub) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
+	return nil, nil
+}
+
+func (browserLoginClientStub) EndSession(context.Context, string) error {
+	return nil
+}
+
 type browserCallbackClientStub struct {
 	token *oauth2.Token
 }
 
 func (s browserCallbackClientStub) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error) {
 	return s.token, nil
+}
+
+func (browserCallbackClientStub) BuildAuthorizationURL(context.Context, infrastructure.AuthorizationURLParams) (string, error) {
+	return "", nil
+}
+
+func (browserCallbackClientStub) EndSession(context.Context, string) error {
+	return nil
 }
 
 type staticStateStore struct {

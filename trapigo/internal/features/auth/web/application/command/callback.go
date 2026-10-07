@@ -6,13 +6,10 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/application"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"golang.org/x/oauth2"
 )
-
-type CallbackKeycloakClient interface {
-	ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error)
-}
 
 type CallbackTokenValidator interface {
 	Validate(ctx context.Context, token string) (*domain.Claims, error)
@@ -30,16 +27,16 @@ type CallbackResult struct {
 }
 
 type CallbackCommand struct {
-	KeycloakClient CallbackKeycloakClient
-	StateStore     CallbackStateStore
-	Validator      CallbackTokenValidator
+	IdentityProvider application.IdentityProvider
+	StateStore       CallbackStateStore
+	Validator        CallbackTokenValidator
 }
 
 func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*CallbackResult, error) {
 	if strings.TrimSpace(code) == "" || strings.TrimSpace(state) == "" {
 		return nil, domain.ErrInvalidCallback
 	}
-	if c.KeycloakClient == nil || c.StateStore == nil || c.Validator == nil {
+	if c.IdentityProvider == nil || c.StateStore == nil || c.Validator == nil {
 		return nil, fmt.Errorf("callback command misconfigured")
 	}
 
@@ -51,7 +48,7 @@ func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*Cal
 		return nil, domain.ErrInvalidState
 	}
 
-	token, err := c.KeycloakClient.ExchangeAuthorizationCode(ctx, code, oauthState.CodeVerifier)
+	token, err := c.IdentityProvider.ExchangeAuthorizationCode(ctx, code, oauthState.CodeVerifier)
 	if err != nil {
 		return nil, err
 	}

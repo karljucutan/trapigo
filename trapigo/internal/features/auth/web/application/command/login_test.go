@@ -6,6 +6,7 @@ import (
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
+	"golang.org/x/oauth2"
 )
 
 type loginStateCapture struct {
@@ -23,9 +24,17 @@ func (loginClientStub) BuildAuthorizationURL(_ context.Context, params infrastru
 	return "https://id.example.com/login?state=" + params.State, nil
 }
 
+func (loginClientStub) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
+	return nil, nil
+}
+
+func (loginClientStub) EndSession(context.Context, string) error {
+	return nil
+}
+
 func TestLoginCommand_PreservesReturnURLInOAuthState(t *testing.T) {
 	store := &loginStateCapture{}
-	cmd := &LoginCommand{KeycloakClient: loginClientStub{}, StateStore: store}
+	cmd := &LoginCommand{IdentityProvider: loginClientStub{}, StateStore: store}
 	const returnURL = "http://localhost:3000/dashboard?tab=logs"
 	if _, err := cmd.Execute(context.Background(), returnURL); err != nil {
 		t.Fatal(err)

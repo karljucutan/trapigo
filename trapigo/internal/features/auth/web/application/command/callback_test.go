@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
+	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
 	"golang.org/x/oauth2"
 )
 
@@ -22,7 +23,7 @@ func TestCallbackCommand_RejectsNonceMismatch(t *testing.T) {
 	}).WithExtra(map[string]any{"id_token": signedIDToken})
 
 	cmd := &CallbackCommand{
-		KeycloakClient: callbackClientStub{token: oauthToken},
+		IdentityProvider: callbackClientStub{token: oauthToken},
 		StateStore: callbackStateStoreStub{state: &domain.OAuthState{
 			State:        "s1",
 			Nonce:        "expected",
@@ -41,7 +42,7 @@ func TestCallbackCommand_RejectsNonceMismatch(t *testing.T) {
 func TestCallbackCommand_ReturnsStoredReturnURL(t *testing.T) {
 	const returnURL = "http://localhost:3000/dashboard"
 	cmd := &CallbackCommand{
-		KeycloakClient: callbackClientStub{token: &oauth2.Token{AccessToken: "access-token"}},
+		IdentityProvider: callbackClientStub{token: &oauth2.Token{AccessToken: "access-token"}},
 		StateStore: callbackStateStoreStub{state: &domain.OAuthState{
 			State: "s1", Nonce: "nonce", CodeVerifier: "verifier",
 			CreatedAt: time.Now(), ReturnURL: returnURL,
@@ -63,6 +64,14 @@ type callbackClientStub struct {
 
 func (s callbackClientStub) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error) {
 	return s.token, nil
+}
+
+func (callbackClientStub) BuildAuthorizationURL(context.Context, infrastructure.AuthorizationURLParams) (string, error) {
+	return "", nil
+}
+
+func (callbackClientStub) EndSession(context.Context, string) error {
+	return nil
 }
 
 type callbackStateStoreStub struct {

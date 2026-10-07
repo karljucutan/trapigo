@@ -28,8 +28,8 @@ import (
 func TestHandleLogin_RedirectsToKeycloak(t *testing.T) {
 	stateStore := infrastructure.NewInMemoryOAuthStateStore(10 * time.Minute)
 	loginCommand := &command.LoginCommand{
-		KeycloakClient: loginClientStub{authURL: "https://id.example.com/login"},
-		StateStore:     stateStore,
+		IdentityProvider: loginClientStub{authURL: "https://id.example.com/login"},
+		StateStore:       stateStore,
 	}
 	handler := &WebAuthHandler{
 		LoginCommand:  loginCommand,
@@ -71,7 +71,7 @@ func TestHandleCallback_WithValidCodeAndState_SetsCookiesAndRedirects(t *testing
 	}
 
 	callbackCommand := &command.CallbackCommand{
-		KeycloakClient: callbackClientStub{token: &oauth2.Token{
+		IdentityProvider: callbackClientStub{token: &oauth2.Token{
 			AccessToken:  buildSignedToken(t, issuer, "trapigo", key, time.Now().Add(10*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-123",
 			Expiry:       time.Now().Add(10 * time.Minute),
@@ -107,11 +107,11 @@ func TestHandleLoginAndCallback_ReturnsToDashboard(t *testing.T) {
 	stateStore := infrastructure.NewInMemoryOAuthStateStore(10 * time.Minute)
 	handler := &WebAuthHandler{
 		LoginCommand: &command.LoginCommand{
-			KeycloakClient: stateReturningLoginClient{},
-			StateStore:     stateStore,
+			IdentityProvider: stateReturningLoginClient{},
+			StateStore:       stateStore,
 		},
 		CallbackCommand: &command.CallbackCommand{
-			KeycloakClient: callbackClientStub{token: &oauth2.Token{
+			IdentityProvider: callbackClientStub{token: &oauth2.Token{
 				AccessToken: buildSignedToken(t, issuer, "trapigo", key, time.Now().Add(10*time.Minute), time.Now().Add(-time.Minute)),
 				Expiry:      time.Now().Add(10 * time.Minute),
 			}},
@@ -154,6 +154,14 @@ func (stateReturningLoginClient) BuildAuthorizationURL(_ context.Context, params
 	return "https://id.example.com/login?state=" + url.QueryEscape(params.State), nil
 }
 
+func (stateReturningLoginClient) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
+	return nil, nil
+}
+
+func (stateReturningLoginClient) EndSession(context.Context, string) error {
+	return nil
+}
+
 func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) {
 	validator, _, _ := newValidatorForHandlerTest(t)
 	stateStore := infrastructure.NewInMemoryOAuthStateStore(50 * time.Millisecond)
@@ -167,9 +175,9 @@ func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) 
 	}
 
 	callbackCommand := &command.CallbackCommand{
-		KeycloakClient: callbackClientStub{token: &oauth2.Token{AccessToken: "token"}},
-		StateStore:     stateStore,
-		Validator:      validator,
+		IdentityProvider: callbackClientStub{token: &oauth2.Token{AccessToken: "token"}},
+		StateStore:       stateStore,
+		Validator:        validator,
 	}
 	handler := &WebAuthHandler{
 		CallbackCommand: callbackCommand,
@@ -323,12 +331,28 @@ func (s loginClientStub) BuildAuthorizationURL(ctx context.Context, params infra
 	return s.authURL, nil
 }
 
+func (loginClientStub) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
+	return nil, nil
+}
+
+func (loginClientStub) EndSession(context.Context, string) error {
+	return nil
+}
+
 type callbackClientStub struct {
 	token *oauth2.Token
 }
 
 func (s callbackClientStub) ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error) {
 	return s.token, nil
+}
+
+func (callbackClientStub) BuildAuthorizationURL(context.Context, infrastructure.AuthorizationURLParams) (string, error) {
+	return "", nil
+}
+
+func (callbackClientStub) EndSession(context.Context, string) error {
+	return nil
 }
 
 type tokenValidatorStub struct {

@@ -126,6 +126,31 @@ func TestRefreshToken_SendsExpectedPayload(t *testing.T) {
 
 type tokenAssertion struct{}
 
+func TestEndSession(t *testing.T) {
+	server := newMockOIDCServer(t, tokenAssertion{})
+	defer server.Close()
+
+	client, err := NewKeycloakClient(Config{
+		IssuerURL:    server.URL,
+		ClientID:     "trapigo-gateway",
+		ClientSecret: "super-secret",
+		RedirectURI:  "https://api.example.com/web/auth/callback",
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+
+	if err := client.EndSession(context.Background(), "refresh-123"); err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if err := client.EndSession(context.Background(), "expired"); err != nil {
+		t.Fatalf("expected invalid_grant to be treated as logged out, got %v", err)
+	}
+	if err := client.EndSession(context.Background(), "boom"); err == nil {
+		t.Fatal("expected error for server failure")
+	}
+}
+
 func newMockOIDCServer(t *testing.T, _ tokenAssertion) *httptest.Server {
 	t.Helper()
 
@@ -139,7 +164,28 @@ func newMockOIDCServer(t *testing.T, _ tokenAssertion) *httptest.Server {
 				"authorization_endpoint": server.URL + "/protocol/openid-connect/auth",
 				"token_endpoint":         server.URL + "/protocol/openid-connect/token",
 				"jwks_uri":               server.URL + "/protocol/openid-connect/certs",
+				"end_session_endpoint":   server.URL + "/protocol/openid-connect/logout",
 			})
+		case "/protocol/openid-connect/logout":
+			if req.Method != http.MethodPost {
+				t.Fatalf("expected POST method, got %s", req.Method)
+			}
+			if err := req.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %v", err)
+			}
+			if req.PostForm.Get("client_id") != "trapigo-gateway" || req.PostForm.Get("client_secret") != "super-secret" {
+				t.Fatalf("unexpected client credentials: %v", req.PostForm)
+			}
+			switch req.PostForm.Get("refresh_token") {
+			case "refresh-123":
+				rw.WriteHeader(http.StatusNoContent)
+			case "expired":
+				rw.Header().Set("Content-Type", "application/json")
+				rw.WriteHeader(http.StatusBadRequest)
+				_, _ = rw.Write([]byte(`{"error":"invalid_grant"}`))
+			default:
+				rw.WriteHeader(http.StatusInternalServerError)
+			}
 		case "/protocol/openid-connect/token":
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST method, got %s", req.Method)

@@ -44,16 +44,16 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 	stateStore := authinfra.NewInMemoryOAuthStateStore(stateTTL)
 
 	loginCommand := &webcommand.LoginCommand{
-		KeycloakClient: keycloakClient,
-		StateStore:     stateStore,
-		StateTTL:       stateTTL,
+		IdentityProvider: keycloakClient,
+		StateStore:       stateStore,
+		StateTTL:         stateTTL,
 	}
 	callbackCommand := &webcommand.CallbackCommand{
-		KeycloakClient: keycloakClient,
-		StateStore:     stateStore,
-		Validator:      jwtValidator,
+		IdentityProvider: keycloakClient,
+		StateStore:       stateStore,
+		Validator:        jwtValidator,
 	}
-	logoutCommand := &webcommand.LogoutCommand{CookieManager: cookieManager}
+	logoutCommand := &webcommand.LogoutCommand{CookieManager: cookieManager, IdentityProvider: keycloakClient}
 	meQuery := &webquery.GetCurrentUserQuery{}
 	handler := &webtransport.WebAuthHandler{
 		LoginCommand:    loginCommand,

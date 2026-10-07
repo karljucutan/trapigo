@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -29,6 +30,7 @@ type DiscoveryDocument struct {
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
 	JWKSURI               string `json:"jwks_uri"`
+	EndSessionEndpoint    string `json:"end_session_endpoint"`
 }
 
 // KeycloakClient handles OIDC discovery and token-related calls to Keycloak.
@@ -185,6 +187,55 @@ func (c *KeycloakClient) RefreshToken(ctx context.Context, refreshToken string) 
 	}
 
 	return token, nil
+}
+
+// EndSession ends the Keycloak SSO session bound to the refresh token.
+func (c *KeycloakClient) EndSession(ctx context.Context, refreshToken string) error {
+	if strings.TrimSpace(refreshToken) == "" {
+		return errors.New("refresh token is required")
+	}
+
+	doc, err := c.Discover(ctx)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(doc.EndSessionEndpoint) == "" {
+		return errors.New("discovery response missing end_session_endpoint")
+	}
+
+	form := url.Values{}
+	form.Set("client_id", c.cfg.ClientID)
+	if strings.TrimSpace(c.cfg.ClientSecret) != "" {
+		form.Set("client_secret", c.cfg.ClientSecret)
+	}
+	form.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, doc.EndSessionEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("build logout request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call end session endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	// An expired or already-revoked refresh token means there is no session left to end.
+	if resp.StatusCode == http.StatusBadRequest {
+		var oauthErr struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &oauthErr) == nil && oauthErr.Error == "invalid_grant" {
+			return nil
+		}
+	}
+	return fmt.Errorf("end session endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 }
 
 func (c *KeycloakClient) oauthConfig(ctx context.Context) (*oauth2.Config, error) {
