@@ -4,6 +4,12 @@
 
 Extend the existing simple Go API Gateway to support two client authentication models:
 
+## Current Project Decision
+
+**For this project, Trapigo (Go API Gateway) retains full ownership of browser authentication.** The `frontend-dashboard` TanStack Start application is a consumer/UI client that calls Trapigo's `/web/auth/*` endpoints. The dashboard does not duplicate Keycloak credentials, OAuth state management, or token refresh logic. All browser session cookies and token refresh are managed by Trapigo.
+
+A future migration to a dedicated BFF service is architecturally possible (see section 28 below) but is explicitly out of scope for the current implementation.
+
 ### Browser clients
 
 - Use the `/web/auth/*` endpoints.
@@ -1112,3 +1118,29 @@ The central design decision is:
 ```
 
 This allows the same Go API Gateway to support both browser and native clients without requiring native applications to use the `/web` BFF authentication flow.
+
+---
+
+# 28. Future: Dedicated BFF Migration
+
+The current architecture places browser authentication (`/web/auth/*`, cookies, refresh) in Trapigo. A later project may extract this to a dedicated BFF service in the `frontend-dashboard` or a separate backend.
+
+## Preconditions for migration
+
+Before moving browser auth to a dedicated BFF:
+1. The BFF must own `/web/auth/login`, `/web/auth/callback`, `/web/auth/logout`, `/web/auth/me`, OAuth state/PKCE, Keycloak client secrets, and token cookies.
+2. Trapigo must become Bearer-only: remove the `CookieManager` and `RefreshTokenFunc` from its authentication middleware.
+3. The BFF must proxy browser API calls to Trapigo, attaching server-side Bearer tokens; browser cookies must not reach Trapigo or downstream APIs.
+4. Callback redirect URIs and cookie domain/host must be consistently configured so redirects and cookie exchange work end-to-end.
+5. The dashboard must handle multiple instances (shared OAuth state store, not in-memory).
+
+## Migration steps
+1. Implement BFF auth endpoints, cookies, and refresh in the target service.
+2. Add same-origin BFF API proxy with Bearer attachment.
+3. Deploy and test BFF flow while Trapigo still accepts both Bearer and cookies.
+4. Switch browser traffic to use BFF auth and proxy.
+5. Remove `/web/auth/*` routes, `CookieManager`, refresh callback, and web command/query from Trapigo.
+6. Simplify Trapigo middleware to Bearer-only, returning 401 for missing/invalid/expired Bearer tokens.
+7. Verify existing Bearer and downstream API tests still pass.
+
+No migration work is part of the current implementation; this is a documented future option.

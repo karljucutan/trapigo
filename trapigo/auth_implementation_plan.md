@@ -2,6 +2,10 @@
 
 This document provides a step-by-step implementation guide for the authentication plan described in `auth_plan.md`.
 
+## Current Project Scope
+
+**Trapigo (Go API Gateway) implements and retains full browser authentication** for this project. The `frontend-dashboard` (TanStack Start) is the client/UI that consumes Trapigo's `/web/auth/*` endpoints and protected `/api/*` routes. No extraction to a dedicated BFF is in scope; that remains a documented future option (see `auth_plan.md` section 28).
+
 ---
 
 ## Architecture Overview
@@ -547,4 +551,15 @@ Native apps would:
 This is why the shared layer is organized the way it is — to support multiple authentication clients using the same core validation logic.
 
 ---
+
+## Future: Dedicated BFF Extraction
+
+If a later project decides to move browser authentication to a dedicated BFF service:
+1. The target service would implement all of `internal/features/auth/web/` (web commands, handlers, cookies).
+2. The target service would host the Keycloak client secrets and OAuth state management.
+3. Trapigo would keep `internal/features/auth/infrastructure/`, `middleware/`, and `gateway/` (JWKS, JWT validation, Bearer token handling).
+4. The target service would proxy browser API calls to Trapigo with Bearer attachment; no BFF cookies or secrets would be forwarded downstream.
+5. Trapigo's authentication middleware would simplify to Bearer-only validation (remove `CookieManager` and `RefreshTokenFunc`).
+
+See `auth_plan.md` section 28 for detailed migration preconditions and steps.
 
