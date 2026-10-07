@@ -26,7 +26,7 @@ type LoginCommand struct {
 	StateTTL       time.Duration
 }
 
-func (c *LoginCommand) Execute(ctx context.Context) (string, error) {
+func (c *LoginCommand) Execute(ctx context.Context, returnURL string) (string, error) {
 	if c.KeycloakClient == nil || c.StateStore == nil {
 		return "", fmt.Errorf("login command misconfigured")
 	}
@@ -46,6 +46,7 @@ func (c *LoginCommand) Execute(ctx context.Context) (string, error) {
 		State:        state,
 		Nonce:        nonce,
 		CodeVerifier: codeVerifier,
+		ReturnURL:    returnURL,
 		CreatedAt:    time.Now().UTC(),
 	}
 	if err := c.StateStore.Save(ctx, oauthState); err != nil {

@@ -21,7 +21,13 @@ type WebAuthHandler struct {
 }
 
 func (h *WebAuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) {
-	redirectURL, err := h.LoginCommand.Execute(req.Context())
+	rw.Header().Set("Cache-Control", "no-store")
+	returnURL, err := validateReturnURL(req.URL.Query().Get("return_to"), h.FrontendURL)
+	if err != nil {
+		http.Error(rw, "invalid return URL", http.StatusBadRequest)
+		return
+	}
+	redirectURL, err := h.LoginCommand.Execute(req.Context(), returnURL)
 	if err != nil {
 		http.Error(rw, "login initialization failed", http.StatusInternalServerError)
 		return
@@ -30,6 +36,7 @@ func (h *WebAuthHandler) HandleLogin(rw http.ResponseWriter, req *http.Request) 
 }
 
 func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Set("Cache-Control", "no-store")
 	code := req.URL.Query().Get("code")
 	state := req.URL.Query().Get("state")
 
@@ -37,6 +44,18 @@ func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Reques
 	if err != nil {
 		http.Error(rw, "callback validation failed", http.StatusUnauthorized)
 		return
+	}
+
+	target := h.FrontendURL
+	if result.ReturnURL != "" {
+		target, err = validateReturnURL(result.ReturnURL, h.FrontendURL)
+		if err != nil {
+			http.Error(rw, "invalid return URL", http.StatusBadRequest)
+			return
+		}
+	}
+	if target == "" {
+		target = "/"
 	}
 
 	ttl := time.Until(result.Token.Expiry)
@@ -48,10 +67,6 @@ func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Reques
 		http.SetCookie(rw, h.CookieManager.RefreshTokenCookie(result.Token.RefreshToken, 30*24*time.Hour))
 	}
 
-	target := h.FrontendURL
-	if target == "" {
-		target = "/"
-	}
 	http.Redirect(rw, req, target, http.StatusFound)
 }
 
@@ -69,6 +84,8 @@ func (h *WebAuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request)
 }
 
 func (h *WebAuthHandler) HandleMe(rw http.ResponseWriter, req *http.Request) {
+	rw.Header().Set("Cache-Control", "private, no-store")
+	rw.Header().Set("Vary", "Cookie, Authorization")
 	claims, ok := authmiddleware.ClaimsFromContext(req.Context())
 	if !ok || claims == nil {
 		http.Error(rw, "unauthorized", http.StatusUnauthorized)

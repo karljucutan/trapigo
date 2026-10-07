@@ -24,8 +24,9 @@ type CallbackStateStore interface {
 }
 
 type CallbackResult struct {
-	Token  *oauth2.Token
-	Claims *domain.Claims
+	Token     *oauth2.Token
+	Claims    *domain.Claims
+	ReturnURL string
 }
 
 type CallbackCommand struct {
@@ -65,7 +66,7 @@ func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*Cal
 		return nil, err
 	}
 
-	return &CallbackResult{Token: token, Claims: claims}, nil
+	return &CallbackResult{Token: token, Claims: claims, ReturnURL: oauthState.ReturnURL}, nil
 }
 
 func validateIDTokenNonce(token *oauth2.Token, expectedNonce string) error {

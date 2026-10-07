@@ -7,6 +7,7 @@ type OAuthState struct {
 	State        string
 	Nonce        string
 	CodeVerifier string
+	ReturnURL    string
 	CreatedAt    time.Time
 }
 

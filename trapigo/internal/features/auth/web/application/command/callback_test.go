@@ -38,6 +38,25 @@ func TestCallbackCommand_RejectsNonceMismatch(t *testing.T) {
 	}
 }
 
+func TestCallbackCommand_ReturnsStoredReturnURL(t *testing.T) {
+	const returnURL = "http://localhost:3000/dashboard"
+	cmd := &CallbackCommand{
+		KeycloakClient: callbackClientStub{token: &oauth2.Token{AccessToken: "access-token"}},
+		StateStore: callbackStateStoreStub{state: &domain.OAuthState{
+			State: "s1", Nonce: "nonce", CodeVerifier: "verifier",
+			CreatedAt: time.Now(), ReturnURL: returnURL,
+		}},
+		Validator: callbackValidatorStub{claims: &domain.Claims{Subject: "user-1"}},
+	}
+	result, err := cmd.Execute(context.Background(), "code", "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReturnURL != returnURL {
+		t.Fatalf("got return URL %q, want %q", result.ReturnURL, returnURL)
+	}
+}
+
 type callbackClientStub struct {
 	token *oauth2.Token
 }

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -44,6 +45,16 @@ func TestHandleLogin_RedirectsToKeycloak(t *testing.T) {
 	}
 	if res.Header().Get("Location") != "https://id.example.com/login" {
 		t.Fatalf("unexpected redirect URL: %s", res.Header().Get("Location"))
+	}
+}
+
+func TestHandleLogin_RejectsExternalReturnURL(t *testing.T) {
+	handler := &WebAuthHandler{FrontendURL: "http://localhost:3000"}
+	req := httptest.NewRequest(http.MethodGet, "/web/auth/login?return_to=https%3A%2F%2Fevil.example", nil)
+	res := httptest.NewRecorder()
+	handler.HandleLogin(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res.Code)
 	}
 }
 
@@ -89,6 +100,58 @@ func TestHandleCallback_WithValidCodeAndState_SetsCookiesAndRedirects(t *testing
 	if len(cookies) < 2 {
 		t.Fatalf("expected auth cookies to be set, got %d", len(cookies))
 	}
+}
+
+func TestHandleLoginAndCallback_ReturnsToDashboard(t *testing.T) {
+	validator, issuer, key := newValidatorForHandlerTest(t)
+	stateStore := infrastructure.NewInMemoryOAuthStateStore(10 * time.Minute)
+	handler := &WebAuthHandler{
+		LoginCommand: &command.LoginCommand{
+			KeycloakClient: stateReturningLoginClient{},
+			StateStore:     stateStore,
+		},
+		CallbackCommand: &command.CallbackCommand{
+			KeycloakClient: callbackClientStub{token: &oauth2.Token{
+				AccessToken: buildSignedToken(t, issuer, "trapigo", key, time.Now().Add(10*time.Minute), time.Now().Add(-time.Minute)),
+				Expiry:      time.Now().Add(10 * time.Minute),
+			}},
+			StateStore: stateStore,
+			Validator:  validator,
+		},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
+		FrontendURL:   "http://localhost:3000",
+	}
+	const returnURL = "http://localhost:3000/dashboard?tab=logs#latest"
+	loginRes := httptest.NewRecorder()
+	handler.HandleLogin(loginRes, httptest.NewRequest(http.MethodGet, "/web/auth/login?return_to="+url.QueryEscape(returnURL), nil))
+	if loginRes.Code != http.StatusFound {
+		t.Fatalf("login returned %d: %s", loginRes.Code, loginRes.Body.String())
+	}
+	authURL, err := url.Parse(loginRes.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := authURL.Query().Get("state")
+	callbackPath := "/web/auth/callback?code=ok&state=" + url.QueryEscape(state)
+	callbackRes := httptest.NewRecorder()
+	handler.HandleCallback(callbackRes, httptest.NewRequest(http.MethodGet, callbackPath, nil))
+	if callbackRes.Code != http.StatusFound || callbackRes.Header().Get("Location") != returnURL {
+		t.Fatalf("callback returned %d, redirect %q; want %q", callbackRes.Code, callbackRes.Header().Get("Location"), returnURL)
+	}
+	if len(callbackRes.Result().Cookies()) == 0 {
+		t.Fatal("expected an authentication cookie")
+	}
+	replayRes := httptest.NewRecorder()
+	handler.HandleCallback(replayRes, httptest.NewRequest(http.MethodGet, callbackPath, nil))
+	if replayRes.Code != http.StatusUnauthorized {
+		t.Fatalf("callback replay returned %d, want unauthorized", replayRes.Code)
+	}
+}
+
+type stateReturningLoginClient struct{}
+
+func (stateReturningLoginClient) BuildAuthorizationURL(_ context.Context, params infrastructure.AuthorizationURLParams) (string, error) {
+	return "https://id.example.com/login?state=" + url.QueryEscape(params.State), nil
 }
 
 func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) {
