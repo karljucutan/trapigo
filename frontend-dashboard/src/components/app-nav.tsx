@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "@tanstack/react-router"
+import { useServerFn } from "@tanstack/react-start"
 import { Button } from "@/components/ui/button"
 import { handleLogout } from "@/server/auth.functions"
 
@@ -14,20 +14,15 @@ interface AppNavProps {
 
 export function AppNav({ user }: AppNavProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const navigate = useNavigate()
+  const logout = useServerFn(handleLogout)
 
   const onLogout = async () => {
     setIsLoggingOut(true)
     try {
-      await handleLogout()
-      // The server function will redirect, but fallback just in case
-      await navigate({ to: "/" })
+      await logout()
     } catch (error) {
       setIsLoggingOut(false)
-      // If it's a redirect error from the server, it's expected
-      if (!String(error).includes("redirect")) {
-        console.error("Logout failed:", error)
-      }
+      console.error("Logout failed:", error)
     }
   }
 

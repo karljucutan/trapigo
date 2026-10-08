@@ -1,7 +1,8 @@
-import { createServerFn, redirect } from "@tanstack/react-start"
+import { createServerFn } from "@tanstack/react-start"
 import { getRequestHeader, setResponseHeader, getResponseHeaders } from "@tanstack/react-start/server"
 import { getAuthConfig, loginURL, callGatewayLogout } from "./auth-gateway.server"
 import { getCurrentUser } from "./auth.server"
+import { redirect } from "@tanstack/react-router"
 
 export const getRouteSession = createServerFn({ method: "POST" })
   .validator((returnTo: string) => {
@@ -29,5 +30,5 @@ export const handleLogout = createServerFn({ method: "POST" })
       getResponseHeaders().append("Set-Cookie", cookie)
     }
     
-    throw redirect({ href: "/" })
+    throw redirect({ to: "/" })
   })
