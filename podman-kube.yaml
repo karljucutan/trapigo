@@ -1,0 +1,334 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgdata-trapigo-services
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgdata-keycloak
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trapigo-services-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trapigo-services-db
+  template:
+    metadata:
+      labels:
+        app: trapigo-services-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:18-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+          hostPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: postgres
+        - name: POSTGRES_DB
+          value: postgres
+        volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U postgres -d postgres
+          initialDelaySeconds: 3
+          periodSeconds: 4
+          timeoutSeconds: 4
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U postgres -d postgres
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 4
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: pgdata-trapigo-services
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trapigo-services-db
+spec:
+  selector:
+    app: trapigo-services-db
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak-db
+  template:
+    metadata:
+      labels:
+        app: keycloak-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:18-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+          hostPort: 5433
+        env:
+        - name: POSTGRES_USER
+          value: keycloak
+        - name: POSTGRES_PASSWORD
+          value: keycloak
+        - name: POSTGRES_DB
+          value: keycloak
+        volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U keycloak -d keycloak
+          initialDelaySeconds: 3
+          periodSeconds: 4
+          timeoutSeconds: 4
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U keycloak -d keycloak
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 4
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: pgdata-keycloak
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-db
+spec:
+  selector:
+    app: keycloak-db
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: quay.io/keycloak/keycloak:latest
+        command:
+        - start-dev
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: KC_DB
+          value: postgres
+        - name: KC_DB_URL_HOST
+          value: keycloak-db
+        - name: KC_DB_URL_PORT
+          value: '5432'
+        - name: KC_DB_URL_DATABASE
+          value: keycloak
+        - name: KC_DB_USERNAME
+          value: keycloak
+        - name: KC_DB_PASSWORD
+          value: keycloak
+        - name: KC_BOOTSTRAP_ADMIN_USERNAME
+          value: admin
+        - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+          value: admin
+        - name: KC_HTTP_RELATIVE_PATH
+          value: /auth
+        - name: KC_PROXY_HEADERS
+          value: xforwarded
+        readinessProbe:
+          httpGet:
+            path: /auth/
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trapigo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trapigo
+  template:
+    metadata:
+      labels:
+        app: trapigo
+    spec:
+      containers:
+      - name: trapigo
+        image: trapigo
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: gateway
+          containerPort: 80
+          hostPort: 80
+        - name: admin
+          containerPort: 8080
+          hostPort: 8080
+        env:
+        - name: BASE_URL
+          value: http://localhost
+        - name: PORT
+          value: '80'
+        - name: TRAPIGO_GATEWAY_CONFIG
+          value: /app/configs/trapigo-gateway.yaml
+        - name: READ_HEADER_TIMEOUT
+          value: '5'
+        - name: READ_TIMEOUT
+          value: '0'
+        - name: WRITE_TIMEOUT
+          value: '0'
+        - name: IDLE_TIMEOUT
+          value: '180'
+        - name: BACKEND_DIAL_TIMEOUT
+          value: '5'
+        - name: BACKEND_TIMEOUT
+          value: '30'
+        volumeMounts:
+        - name: trapigo-configs
+          mountPath: /app/configs
+          readOnly: true
+      volumes:
+      - name: trapigo-configs
+        hostPath:
+          path: /ABSOLUTE/PATH/TO/trapigo/configs
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trapigo
+spec:
+  selector:
+    app: trapigo
+  ports:
+  - name: gateway
+    port: 80
+    targetPort: 80
+  - name: admin
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-order-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: go-order-service
+  template:
+    metadata:
+      labels:
+        app: go-order-service
+    spec:
+      containers:
+      - name: go-order-service
+        image: go-order-service
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: HOST
+          value: 0.0.0.0
+        - name: PORT
+          value: '8080'
+        - name: DB_DSN
+          value: postgres://postgres:postgres@trapigo-services-db:5432/go-order-service?sslmode=disable
+        - name: APP_ENV
+          value: docker
+        - name: LOG_LEVEL
+          value: INFO
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-order-service
+spec:
+  selector:
+    app: go-order-service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
