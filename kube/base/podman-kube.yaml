@@ -172,7 +172,7 @@ spec:
       containers:
       - name: keycloak
         image: quay.io/keycloak/keycloak:latest
-        command:
+        args:
         - start-dev
         ports:
         - name: http
@@ -235,7 +235,7 @@ spec:
     spec:
       containers:
       - name: trapigo
-        image: trapigo
+        image: localhost/trapigo:prod
         imagePullPolicy: IfNotPresent
         ports:
         - name: gateway
@@ -244,12 +244,9 @@ spec:
         - name: admin
           containerPort: 8080
           hostPort: 8080
-        - name: delve
-          containerPort: 40000
-          hostPort: 40000
         env:
         - name: LOG_LEVEL
-          value: DEBUG
+          value: INFO
         - name: BASE_URL
           value: http://localhost
         - name: PORT
@@ -268,9 +265,6 @@ spec:
           value: '5'
         - name: BACKEND_TIMEOUT
           value: '30'
-        securityContext:
-          seccompProfile:
-            type: Unconfined
         volumeMounts:
         - name: trapigo-configs
           mountPath: /app/configs
@@ -278,7 +272,7 @@ spec:
       volumes:
       - name: trapigo-configs
         hostPath:
-          path: /ABSOLUTE/PATH/TO/trapigo/configs
+          path: ./trapigo/configs
           type: Directory
 ---
 apiVersion: v1
@@ -312,7 +306,7 @@ spec:
     spec:
       containers:
       - name: go-order-service
-        image: go-order-service
+        image: localhost/go-order-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

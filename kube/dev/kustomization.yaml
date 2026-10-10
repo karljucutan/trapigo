@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+sortOptions:
+  order: fifo
+images:
+  - name: localhost/trapigo
+    newTag: dev
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: trapigo
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: trapigo
+      spec:
+        template:
+          metadata:
+            annotations:
+              container.seccomp.security.alpha.kubernetes.io/trapigo: unconfined
+          spec:
+            containers:
+              - name: trapigo
+                env:
+                  - name: LOG_LEVEL
+                    value: DEBUG
+                ports:
+                  - name: delve
+                    containerPort: 40000
+                    hostPort: 40000
