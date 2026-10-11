@@ -23,6 +23,27 @@ From the project root:
 # goose -dir db/migrations postgres "postgres://postgres:postgres@localhost:5432/trapigo?sslmode=disable" status
 ```
 
+If using the .env file, you can just run:
+
+```bash
+# run all pending migrations
+# goose up
+
+# check migration status
+# goose status
+```
+
+Example .env file:
+
+```env
+GOOSE_DRIVER=postgres
+GOOSE_DBSTRING=postgres://postgres:postgres@localhost:5432/go-order-service
+GOOSE_MIGRATION_DIR=./db/migrations
+```
+
+
+
+
 ## Migration naming
 
 Use timestamped filenames such as:
