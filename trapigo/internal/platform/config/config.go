@@ -8,17 +8,18 @@ import (
 )
 
 type Config struct {
-	HTTP          HTTPConfig            `yaml:"http"`
-	Keycloak      KeycloakConfig        `yaml:"keycloak"`
-	Auth          AuthConfig            `yaml:"auth"`
+	HTTP           HTTPConfig           `yaml:"http"`
+	Keycloak       KeycloakConfig       `yaml:"keycloak"`
+	Auth           AuthConfig           `yaml:"auth"`
 	AllowedOrigins AllowedOriginsConfig `yaml:"allowed_origins"`
 }
 
 type KeycloakConfig struct {
-	IssuerURL    string `yaml:"issuer_url"`
-	ClientID     string `yaml:"client_id"`
-	ClientSecret string `yaml:"client_secret"`
-	RedirectURI  string `yaml:"redirect_uri"`
+	IssuerURL        string `yaml:"issuer_url"`
+	InternalRealmURL string `yaml:"internal_realm_url"`
+	ClientID         string `yaml:"client_id"`
+	ClientSecret     string `yaml:"client_secret"`
+	RedirectURI      string `yaml:"redirect_uri"`
 }
 
 type AuthConfig struct {

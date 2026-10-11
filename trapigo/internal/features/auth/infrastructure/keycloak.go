@@ -18,10 +18,11 @@ import (
 
 // Config contains the Keycloak and OAuth client configuration used by this gateway.
 type Config struct {
-	IssuerURL    string
-	ClientID     string
-	ClientSecret string
-	RedirectURI  string
+	IssuerURL        string
+	InternalRealmURL string
+	ClientID         string
+	ClientSecret     string
+	RedirectURI      string
 }
 
 // DiscoveryDocument is the subset of OIDC discovery fields required by this service.
@@ -55,6 +56,9 @@ func NewKeycloakClient(cfg Config, httpClient *http.Client) (*KeycloakClient, er
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
+	if strings.TrimSpace(cfg.InternalRealmURL) == "" {
+		cfg.InternalRealmURL = cfg.IssuerURL
+	}
 
 	return &KeycloakClient{
 		cfg:        cfg,
@@ -71,7 +75,7 @@ func (c *KeycloakClient) Discover(ctx context.Context) (*DiscoveryDocument, erro
 	}
 	c.mu.RUnlock()
 
-	discoveryURL := strings.TrimRight(c.cfg.IssuerURL, "/") + "/.well-known/openid-configuration"
+	discoveryURL := strings.TrimRight(c.cfg.InternalRealmURL, "/") + "/.well-known/openid-configuration"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build discovery request: %w", err)
@@ -96,6 +100,26 @@ func (c *KeycloakClient) Discover(ctx context.Context) (*DiscoveryDocument, erro
 	if strings.TrimSpace(doc.AuthorizationEndpoint) == "" || strings.TrimSpace(doc.TokenEndpoint) == "" {
 		return nil, errors.New("discovery response missing required endpoints")
 	}
+	doc.AuthorizationEndpoint, err = rebaseEndpointURL(doc.AuthorizationEndpoint, c.cfg.IssuerURL)
+	if err != nil {
+		return nil, fmt.Errorf("configure public authorization endpoint: %w", err)
+	}
+	doc.TokenEndpoint, err = rebaseEndpointURL(doc.TokenEndpoint, c.cfg.InternalRealmURL)
+	if err != nil {
+		return nil, fmt.Errorf("configure internal token endpoint: %w", err)
+	}
+	if doc.EndSessionEndpoint != "" {
+		doc.EndSessionEndpoint, err = rebaseEndpointURL(doc.EndSessionEndpoint, c.cfg.InternalRealmURL)
+		if err != nil {
+			return nil, fmt.Errorf("configure internal end-session endpoint: %w", err)
+		}
+	}
+	if doc.JWKSURI != "" {
+		doc.JWKSURI, err = rebaseEndpointURL(doc.JWKSURI, c.cfg.InternalRealmURL)
+		if err != nil {
+			return nil, fmt.Errorf("configure internal JWKS endpoint: %w", err)
+		}
+	}
 
 	c.mu.Lock()
 	c.discovery = &doc
@@ -103,6 +127,23 @@ func (c *KeycloakClient) Discover(ctx context.Context) (*DiscoveryDocument, erro
 
 	cloned := doc
 	return &cloned, nil
+}
+
+func rebaseEndpointURL(endpointURL, baseURL string) (string, error) {
+	endpoint, err := url.Parse(endpointURL)
+	if err != nil {
+		return "", err
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return "", err
+	}
+	if endpoint.Scheme == "" || endpoint.Host == "" || base.Scheme == "" || base.Host == "" {
+		return "", errors.New("endpoint and base URL must be absolute URLs")
+	}
+	endpoint.Scheme = base.Scheme
+	endpoint.Host = base.Host
+	return endpoint.String(), nil
 }
 
 // AuthorizationURLParams defines values required for Authorization Code + PKCE redirection.

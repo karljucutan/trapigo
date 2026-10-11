@@ -86,8 +86,11 @@ func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig returned an error: %v", err)
 	}
-	if cfg.Keycloak.IssuerURL != "http://localhost/auth/realms/CompanyA" {
+	if cfg.Keycloak.IssuerURL != "http://localhost:8081/auth/realms/CompanyRealmA" {
 		t.Fatalf("unexpected keycloak issuer URL: %s", cfg.Keycloak.IssuerURL)
+	}
+	if cfg.Keycloak.InternalRealmURL != "http://keycloak:8080/auth/realms/CompanyRealmA" {
+		t.Fatalf("unexpected internal keycloak realm URL: %s", cfg.Keycloak.InternalRealmURL)
 	}
 
 	router, ok := cfg.HTTP.Routers["go-orders-router"]

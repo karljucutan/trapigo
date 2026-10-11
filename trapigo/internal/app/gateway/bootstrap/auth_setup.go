@@ -24,10 +24,11 @@ type authComponents struct {
 
 func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 	keycloakClient, err := authinfra.NewKeycloakClient(authinfra.Config{
-		IssuerURL:    cfg.Keycloak.IssuerURL,
-		ClientID:     cfg.Keycloak.ClientID,
-		ClientSecret: cfg.Keycloak.ClientSecret,
-		RedirectURI:  cfg.Keycloak.RedirectURI,
+		IssuerURL:        cfg.Keycloak.IssuerURL,
+		InternalRealmURL: cfg.Keycloak.InternalRealmURL,
+		ClientID:         cfg.Keycloak.ClientID,
+		ClientSecret:     cfg.Keycloak.ClientSecret,
+		RedirectURI:      cfg.Keycloak.RedirectURI,
 	}, http.DefaultClient)
 	if err != nil {
 		return nil, fmt.Errorf("initialize keycloak client: %w", err)
@@ -35,6 +36,7 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 
 	jwtValidator := authinfra.NewJWTValidatorWithJWKSCacheTTL(
 		cfg.Keycloak.IssuerURL,
+		cfg.Keycloak.InternalRealmURL,
 		cfg.Keycloak.ClientID,
 		time.Duration(cfg.Auth.JWKSCacheTTLSec)*time.Second,
 		http.DefaultClient,

@@ -74,6 +74,53 @@ func TestBuildAuthorizationURL_IncludesExpectedParams(t *testing.T) {
 	}
 }
 
+func TestDiscoverUsesInternalRealmURLAndPreservesPublicAuthorizationURL(t *testing.T) {
+	const publicRealmURL = "http://localhost:8081/auth/realms/CompanyRealmA"
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/auth/realms/CompanyRealmA/.well-known/openid-configuration" {
+			http.NotFound(rw, req)
+			return
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]string{
+			"issuer":                 publicRealmURL,
+			"authorization_endpoint": publicRealmURL + "/protocol/openid-connect/auth",
+			"token_endpoint":         publicRealmURL + "/protocol/openid-connect/token",
+			"jwks_uri":               publicRealmURL + "/protocol/openid-connect/certs",
+			"end_session_endpoint":   publicRealmURL + "/protocol/openid-connect/logout",
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := NewKeycloakClient(Config{
+		IssuerURL:        publicRealmURL,
+		InternalRealmURL: server.URL + "/auth/realms/CompanyRealmA",
+		ClientID:         "trapigo-gateway",
+		RedirectURI:      "http://localhost:8081/web/auth/callback",
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("NewKeycloakClient returned error: %v", err)
+	}
+
+	doc, err := client.Discover(context.Background())
+	if err != nil {
+		t.Fatalf("Discover returned error: %v", err)
+	}
+	if doc.AuthorizationEndpoint != publicRealmURL+"/protocol/openid-connect/auth" {
+		t.Fatalf("expected public authorization endpoint, got %s", doc.AuthorizationEndpoint)
+	}
+	internalEndpoint := server.URL + "/auth/realms/CompanyRealmA/protocol/openid-connect/"
+	if doc.TokenEndpoint != internalEndpoint+"token" {
+		t.Fatalf("expected internal token endpoint, got %s", doc.TokenEndpoint)
+	}
+	if doc.JWKSURI != internalEndpoint+"certs" {
+		t.Fatalf("expected internal JWKS endpoint, got %s", doc.JWKSURI)
+	}
+	if doc.EndSessionEndpoint != internalEndpoint+"logout" {
+		t.Fatalf("expected internal end-session endpoint, got %s", doc.EndSessionEndpoint)
+	}
+}
+
 func TestExchangeAuthorizationCode_SendsExpectedPayload(t *testing.T) {
 	assertion := tokenAssertion{}
 	server := newMockOIDCServer(t, assertion)

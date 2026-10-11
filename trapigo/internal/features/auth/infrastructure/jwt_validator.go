@@ -21,6 +21,7 @@ import (
 // JWTValidator validates access tokens issued by Keycloak using JWKS.
 type JWTValidator struct {
 	issuerURL    string
+	jwksURL      string
 	clientID     string
 	jwksCacheTTL time.Duration
 	httpClient   *http.Client
@@ -43,10 +44,10 @@ type jwk struct {
 }
 
 func NewJWTValidator(issuerURL, clientID string, httpClient *http.Client) *JWTValidator {
-	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID, time.Hour, httpClient)
+	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, issuerURL, clientID, time.Hour, httpClient)
 }
 
-func NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID string, jwksCacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
+func NewJWTValidatorWithJWKSCacheTTL(issuerURL, internalRealmURL, clientID string, jwksCacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
@@ -54,8 +55,11 @@ func NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID string, jwksCacheTTL ti
 		jwksCacheTTL = time.Hour
 	}
 	trimmedIssuerURL := strings.TrimRight(issuerURL, "/")
+	trimmedInternalRealmURL := strings.TrimRight(internalRealmURL, "/")
+
 	return &JWTValidator{
 		issuerURL:        trimmedIssuerURL,
+		jwksURL:          trimmedInternalRealmURL + "/protocol/openid-connect/certs",
 		clientID:         clientID,
 		jwksCacheTTL:     jwksCacheTTL,
 		httpClient:       httpClient,
@@ -65,7 +69,7 @@ func NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID string, jwksCacheTTL ti
 
 // Deprecated: use NewJWTValidatorWithJWKSCacheTTL.
 func NewJWTValidatorWithCacheTTL(issuerURL, clientID string, cacheTTL time.Duration, httpClient *http.Client) *JWTValidator {
-	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, clientID, cacheTTL, httpClient)
+	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, issuerURL, clientID, cacheTTL, httpClient)
 }
 
 func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domain.Claims, error) {
@@ -181,8 +185,7 @@ func (v *JWTValidator) refreshJWKS(ctx context.Context, force bool) error {
 	}
 	v.mu.RUnlock()
 
-	jwksURL := v.issuerURL + "/protocol/openid-connect/certs"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.jwksURL, nil)
 	if err != nil {
 		return fmt.Errorf("%w: build JWKS request: %v", domain.ErrKeycloakConnection, err)
 	}
