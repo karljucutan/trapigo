@@ -1,3 +1,9 @@
+# Kubernetes control loop: Deployments reconcile ReplicaSets; ReplicaSets create Pods.
+# A Service selects matching Pods by labels and provides stable DNS/load balancing.
+# A PVC requests persistent storage from the cluster's StorageClass/provisioner.
+# ==============================================================================
+# Persistent Storage: Services Database and Keycloak Database
+# ==============================================================================
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -21,6 +27,10 @@ spec:
     requests:
       storage: 5Gi
 ---
+# ==============================================================================
+# Trapigo Services Database: Deployment and Service
+# ==============================================================================
+# Deployment controller -> ReplicaSet -> PostgreSQL Pod; the Pod mounts its PVC.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,7 +40,7 @@ spec:
   selector:
     matchLabels:
       app: trapigo-services-db
-  template:
+  template: # pod template
     metadata:
       labels:
         app: trapigo-services-db
@@ -41,14 +51,22 @@ spec:
         ports:
         - name: postgres
           containerPort: 5432
-          hostPort: 5432
         env:
         - name: POSTGRES_USER
-          value: postgres
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: SERVICES_DB_USER
         - name: POSTGRES_PASSWORD
-          value: postgres
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: SERVICES_DB_PASSWORD
         - name: POSTGRES_DB
-          value: postgres
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: SERVICES_DB_NAME
         volumeMounts:
         - name: pgdata
           mountPath: /var/lib/postgresql
@@ -57,7 +75,7 @@ spec:
             command:
             - sh
             - -c
-            - pg_isready -U postgres -d postgres
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
           initialDelaySeconds: 3
           periodSeconds: 4
           timeoutSeconds: 4
@@ -67,7 +85,7 @@ spec:
             command:
             - sh
             - -c
-            - pg_isready -U postgres -d postgres
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
           initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 4
@@ -76,6 +94,7 @@ spec:
         persistentVolumeClaim:
           claimName: pgdata-trapigo-services
 ---
+# Stable in-cluster endpoint: trapigo-services-db:5432 -> matching PostgreSQL Pod.
 apiVersion: v1
 kind: Service
 metadata:
@@ -88,6 +107,10 @@ spec:
     port: 5432
     targetPort: 5432
 ---
+# ==============================================================================
+# Keycloak Database: Deployment and Service
+# ==============================================================================
+# Deployment controller -> ReplicaSet -> PostgreSQL Pod; the Pod mounts its PVC.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -97,7 +120,7 @@ spec:
   selector:
     matchLabels:
       app: keycloak-db
-  template:
+  template: # pod template
     metadata:
       labels:
         app: keycloak-db
@@ -108,14 +131,22 @@ spec:
         ports:
         - name: postgres
           containerPort: 5432
-          hostPort: 5433
         env:
         - name: POSTGRES_USER
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_USER
         - name: POSTGRES_PASSWORD
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_PASSWORD
         - name: POSTGRES_DB
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_NAME
         volumeMounts:
         - name: pgdata
           mountPath: /var/lib/postgresql
@@ -124,7 +155,7 @@ spec:
             command:
             - sh
             - -c
-            - pg_isready -U keycloak -d keycloak
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
           initialDelaySeconds: 3
           periodSeconds: 4
           timeoutSeconds: 4
@@ -134,7 +165,7 @@ spec:
             command:
             - sh
             - -c
-            - pg_isready -U keycloak -d keycloak
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
           initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 4
@@ -143,6 +174,7 @@ spec:
         persistentVolumeClaim:
           claimName: pgdata-keycloak
 ---
+# Stable in-cluster endpoint: keycloak-db:5432 -> matching PostgreSQL Pod.
 apiVersion: v1
 kind: Service
 metadata:
@@ -155,6 +187,10 @@ spec:
     port: 5432
     targetPort: 5432
 ---
+# ==============================================================================
+# Keycloak: Deployment and Service
+# ==============================================================================
+# Deployment controller -> ReplicaSet -> Keycloak Pod.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -164,7 +200,7 @@ spec:
   selector:
     matchLabels:
       app: keycloak
-  template:
+  template: # pod template
     metadata:
       labels:
         app: keycloak
@@ -185,15 +221,30 @@ spec:
         - name: KC_DB_URL_PORT
           value: '5432'
         - name: KC_DB_URL_DATABASE
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_NAME
         - name: KC_DB_USERNAME
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_USER
         - name: KC_DB_PASSWORD
-          value: keycloak
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_DB_PASSWORD
         - name: KC_BOOTSTRAP_ADMIN_USERNAME
-          value: admin
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_BOOTSTRAP_ADMIN_USERNAME
         - name: KC_BOOTSTRAP_ADMIN_PASSWORD
-          value: admin
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KC_BOOTSTRAP_ADMIN_PASSWORD
         - name: KC_HTTP_RELATIVE_PATH
           value: /auth
         - name: KC_PROXY_HEADERS
@@ -207,6 +258,7 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 12
 ---
+# Stable in-cluster endpoint: keycloak:8080 -> ready Keycloak Pod(s).
 apiVersion: v1
 kind: Service
 metadata:
@@ -219,6 +271,10 @@ spec:
     port: 8080
     targetPort: 8080
 ---
+# ==============================================================================
+# Trapigo API Gateway: Deployment and Service
+# ==============================================================================
+# Deployment controller -> ReplicaSet -> gateway Pod.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -228,7 +284,7 @@ spec:
   selector:
     matchLabels:
       app: trapigo
-  template:
+  template: # pod template
     metadata:
       labels:
         app: trapigo
@@ -240,10 +296,8 @@ spec:
         ports:
         - name: gateway
           containerPort: 80
-          hostPort: 80
         - name: admin
           containerPort: 8080
-          hostPort: 8080
         env:
         - name: LOG_LEVEL
           value: INFO
@@ -265,16 +319,8 @@ spec:
           value: '5'
         - name: BACKEND_TIMEOUT
           value: '30'
-        volumeMounts:
-        - name: trapigo-configs
-          mountPath: /app/configs
-          readOnly: true
-      volumes:
-      - name: trapigo-configs
-        hostPath:
-          path: ./trapigo/configs
-          type: Directory
 ---
+# Stable in-cluster endpoint; local-dev adds hostPort bindings in its overlay.
 apiVersion: v1
 kind: Service
 metadata:
@@ -290,6 +336,10 @@ spec:
     port: 8080
     targetPort: 8080
 ---
+# ==============================================================================
+# Go Order Service: Deployment and Service
+# ==============================================================================
+# Deployment controller -> ReplicaSet -> 3 API Pods; the Service load-balances them.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -299,7 +349,7 @@ spec:
   selector:
     matchLabels:
       app: go-order-service
-  template:
+  template: # pod template
     metadata:
       labels:
         app: go-order-service
@@ -317,12 +367,16 @@ spec:
         - name: PORT
           value: '8080'
         - name: DB_DSN
-          value: postgres://postgres:postgres@trapigo-services-db:5432/go-order-service?sslmode=disable
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: ORDER_DB_DSN
         - name: APP_ENV
           value: docker
         - name: LOG_LEVEL
           value: INFO
 ---
+# Stable in-cluster endpoint: go-order-service:8080 -> matching API Pods.
 apiVersion: v1
 kind: Service
 metadata:
