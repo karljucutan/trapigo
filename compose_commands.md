@@ -39,6 +39,7 @@ Secret references, while the local-dev overlay supplies fake credentials.
 The root Kustomization selects local-dev. The production overlay supplies no
 credentials and remains a scaffold pending environment-specific configuration.
 
-The folder reorganization does not yet resolve Kind image loading, storage,
-gateway configuration mounts, or external port access. See the deployment notes
-before attempting to launch the stack.
+Local manifests target Podman `kube play`, not Kind. See
+[local kube commands](./podman_kube_commands.md) for image builds, rendering, startup,
+and teardown. ConfigMaps and persistent volumes are handled by Podman; order
+migrations and Keycloak realm/client configuration remain separate steps.

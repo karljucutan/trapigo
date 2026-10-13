@@ -4,3 +4,33 @@ resources:
   - kube.yaml
 sortOptions:
   order: fifo
+
+configMapGenerator:
+  - name: trapigo-gateway-config
+    files:
+      - ../../trapigo/configs/trapigo-gateway-kube.yaml
+  - name: trapigo-gateway-env
+    literals:
+      - LOG_LEVEL=INFO
+      - BASE_URL=http://localhost
+      - PORT=80
+      - TRAPIGO_GATEWAY_CONFIG=/app/configs/trapigo-gateway-kube.yaml
+      - READ_HEADER_TIMEOUT=5
+      - READ_TIMEOUT=0
+      - WRITE_TIMEOUT=0
+      - IDLE_TIMEOUT=180
+      - BACKEND_DIAL_TIMEOUT=5
+      - BACKEND_TIMEOUT=30
+  - name: keycloak-env
+    literals:
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=keycloak-db
+      - KC_DB_URL_PORT=5432
+      - KC_HTTP_RELATIVE_PATH=/auth
+      - KC_PROXY_HEADERS=xforwarded
+  - name: go-order-service-env
+    literals:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - APP_ENV=docker
+      - LOG_LEVEL=INFO

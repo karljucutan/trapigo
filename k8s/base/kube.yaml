@@ -213,13 +213,10 @@ spec:
         ports:
         - name: http
           containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: keycloak-env
         env:
-        - name: KC_DB
-          value: postgres
-        - name: KC_DB_URL_HOST
-          value: keycloak-db
-        - name: KC_DB_URL_PORT
-          value: '5432'
         - name: KC_DB_URL_DATABASE
           valueFrom:
             secretKeyRef:
@@ -245,10 +242,6 @@ spec:
             secretKeyRef:
               name: trapigo-monorepo-secrets
               key: KC_BOOTSTRAP_ADMIN_PASSWORD
-        - name: KC_HTTP_RELATIVE_PATH
-          value: /auth
-        - name: KC_PROXY_HEADERS
-          value: xforwarded
         readinessProbe:
           httpGet:
             path: /auth/
@@ -275,6 +268,38 @@ spec:
 # Trapigo API Gateway: Deployment and Service
 # ==============================================================================
 # Deployment controller -> ReplicaSet -> gateway Pod.
+# ServiceAccount gives the gateway Pod an identity for Kubernetes API calls.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trapigo
+---
+# Namespace-scoped permission for startup discovery of Service EndpointSlices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trapigo-endpoint-discovery
+rules:
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - list
+---
+# Grants the gateway ServiceAccount the EndpointSlice list permission above.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trapigo-endpoint-discovery
+subjects:
+- kind: ServiceAccount
+  name: trapigo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trapigo-endpoint-discovery
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -289,6 +314,8 @@ spec:
       labels:
         app: trapigo
     spec:
+      # Uses the ServiceAccount granted permission by the RoleBinding above.
+      serviceAccountName: trapigo
       containers:
       - name: trapigo
         image: localhost/trapigo:prod
@@ -298,27 +325,28 @@ spec:
           containerPort: 80
         - name: admin
           containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: trapigo-gateway-env
         env:
-        - name: LOG_LEVEL
-          value: INFO
-        - name: BASE_URL
-          value: http://localhost
-        - name: PORT
-          value: '80'
-        - name: TRAPIGO_GATEWAY_CONFIG
-          value: /app/configs/trapigo-gateway.yaml
-        - name: READ_HEADER_TIMEOUT
-          value: '5'
-        - name: READ_TIMEOUT
-          value: '0'
-        - name: WRITE_TIMEOUT
-          value: '0'
-        - name: IDLE_TIMEOUT
-          value: '180'
-        - name: BACKEND_DIAL_TIMEOUT
-          value: '5'
-        - name: BACKEND_TIMEOUT
-          value: '30'
+        # client-go uses this namespace when listing the backend EndpointSlices.
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: KEYCLOAK_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: trapigo-monorepo-secrets
+              key: KEYCLOAK_CLIENT_SECRET
+        volumeMounts:
+        - name: trapigo-configs
+          mountPath: /app/configs
+          readOnly: true
+      volumes:
+      - name: trapigo-configs
+        configMap:
+          name: trapigo-gateway-config
 ---
 # Stable in-cluster endpoint; local-dev adds hostPort bindings in its overlay.
 apiVersion: v1
@@ -339,7 +367,8 @@ spec:
 # ==============================================================================
 # Go Order Service: Deployment and Service
 # ==============================================================================
-# Deployment controller -> ReplicaSet -> 3 API Pods; the Service load-balances them.
+# Deployment controller -> ReplicaSet -> 3 API Pods; the Service selector below
+# matches each Pod's app label so Kubernetes can publish their endpoints.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -359,24 +388,21 @@ spec:
         image: localhost/go-order-service:latest
         imagePullPolicy: IfNotPresent
         ports:
+        # This port name must match kubernetes.port in trapigo-gateway-kube.yaml.
         - name: http
           containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: go-order-service-env
         env:
-        - name: HOST
-          value: 0.0.0.0
-        - name: PORT
-          value: '8080'
         - name: DB_DSN
           valueFrom:
             secretKeyRef:
               name: trapigo-monorepo-secrets
               key: ORDER_DB_DSN
-        - name: APP_ENV
-          value: docker
-        - name: LOG_LEVEL
-          value: INFO
 ---
-# Stable in-cluster endpoint: go-order-service:8080 -> matching API Pods.
+# The gateway discovers Pod IPs from EndpointSlices belonging to this Service.
+# selector must match the Deployment's Pod-template labels above.
 apiVersion: v1
 kind: Service
 metadata:
@@ -385,6 +411,7 @@ spec:
   selector:
     app: go-order-service
   ports:
+  # The named Service port is matched with kubernetes.port in the gateway config.
   - name: http
     port: 8080
     targetPort: 8080

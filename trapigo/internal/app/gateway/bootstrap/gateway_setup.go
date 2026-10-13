@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 
 	authgateway "github.com/karljucutan/trapigo/trapigo/internal/features/auth/gateway"
@@ -33,13 +34,33 @@ func loadGatewayConfig() (*config.Config, error) {
 }
 
 func buildLoadBalancer(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[string]*routeProxy, error) {
+	kubernetesBuilder := &kubernetesBackendBuilder{namespace: os.Getenv("POD_NAMESPACE")}
+	return buildLoadBalancerWithDiscovery(httpCfg, kubernetesBuilder)
+}
+
+func buildLoadBalancerWithDiscovery(httpCfg config.HTTPConfig, kubernetesBuilder *kubernetesBackendBuilder) (*domain.LoadBalancer, map[string]*routeProxy, error) {
 	loadBalancer := domain.NewLoadBalancer()
 	routeProxies := make(map[string]*routeProxy)
 
 	for routerName, router := range httpCfg.Routers {
 		service, ok := httpCfg.Services[router.Service]
-		if !ok || len(service.LoadBalancer.Servers) == 0 {
+		if !ok {
 			return nil, nil, fmt.Errorf("service %q for router %q not found", router.Service, routerName)
+		}
+
+		servers := service.LoadBalancer.Servers
+		if service.Kubernetes != nil {
+			if len(servers) > 0 {
+				return nil, nil, fmt.Errorf("service %q for router %q must configure either static servers or kubernetes discovery, not both", router.Service, routerName)
+			}
+			discovered, err := kubernetesBuilder.servers(router.Service, *service.Kubernetes)
+			if err != nil {
+				return nil, nil, fmt.Errorf("discover Kubernetes backends for service %q: %w", router.Service, err)
+			}
+			servers = discovered
+		}
+		if len(servers) == 0 {
+			return nil, nil, fmt.Errorf("service %q for router %q has no configured or discovered backends", router.Service, routerName)
 		}
 
 		lbRouter := domain.NewRouter(
@@ -49,7 +70,7 @@ func buildLoadBalancer(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[str
 		)
 		loadBalancer.AddRouter(lbRouter)
 
-		for _, server := range service.LoadBalancer.Servers {
+		for _, server := range servers {
 			upstreamURL, err := url.Parse(server.URL)
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid upstream URL %q for router %q: %w", server.URL, routerName, err)

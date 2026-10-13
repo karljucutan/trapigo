@@ -128,7 +128,11 @@ or include animation or trace-query delays in the request's duration.
 - `buildingblocks/middleware/logging.go`: service duration logging and request
   ID generation, currently not a cross-service trace system.
 - `go-order-service/cmd/app/main.go`: service logging middleware registration.
-- `trapigo/configs/trapigo-gateway.yaml`: three explicit Go service upstreams.
+- `trapigo/configs/trapigo-gateway.yaml`: Docker/Compose gateway config with
+  three explicit Go container upstreams.
+- `trapigo/configs/trapigo-gateway-kube.yaml`: Kubernetes gateway config that
+  discovers ready Go Pod endpoints from EndpointSlices for Trapigo's own
+  round-robin pool.
 
 Actual processing order is logging, rate limit, CSRF/origin checks,
 authentication, route matching, round-robin selection, and proxying.

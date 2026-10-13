@@ -1,0 +1,59 @@
+http:
+  # Simple Global Rate Limiting Configuration. Rate Limiting in production is better configurable per service
+  rate-limit:
+    enabled: true
+    token-bucket:
+      capacity: 300
+      refill-rate: 1.67
+      refill-interval-in-seconds: 1
+
+  routers:
+    keycloak-router:
+      path-prefix: /auth
+      service: keycloak
+
+    go-orders-router:
+      path-prefix: /api/v1/go-orders
+      service: go-order-service
+
+    dotnet10aot-orders-router:
+      path-prefix: /api/v1/dotnet10-aot-orders
+      service: dotnet10aot-order-service
+
+  services:
+    keycloak:
+      load-balancer:
+        servers:
+          - url: http://keycloak:8080
+
+    go-order-service:
+      # Trapigo discovers ready Pod IPs from this Service's EndpointSlices at startup.
+      kubernetes:
+        # Must match the Kubernetes Service metadata.name.
+        service: go-order-service
+        # Must match the Service port name in k8s/base/kube.yaml.
+        port: http
+
+    dotnet10aot-order-service:
+      load-balancer:
+        servers:
+          - url: http://dotnet10aot-order-service:8080
+
+keycloak:
+  issuer_url: http://localhost:8081/auth/realms/CompanyRealmA
+  internal_realm_url: http://keycloak:8080/auth/realms/CompanyRealmA
+  client_id: trapigo-apigateway
+  client_secret: ${KEYCLOAK_CLIENT_SECRET}
+  redirect_uri: http://localhost:8081/web/auth/callback
+
+auth:
+  cookie_secure: false
+  cookie_same_site: Lax
+  state_expiration_seconds: 600
+  jwt_cache_ttl_seconds: 3600
+  required_scopes: []
+  frontend_redirect_url: http://localhost:3000
+
+allowed_origins:
+  values:
+    - http://localhost:3000

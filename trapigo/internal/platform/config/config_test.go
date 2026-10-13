@@ -82,7 +82,8 @@ func TestLoadConfig_ExpandsEnvironmentVariables(t *testing.T) {
 }
 
 func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
-	cfg, err := LoadConfig("../../../configs/trapigo-gateway.yaml")
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "test-client-secret")
+	cfg, err := LoadConfig("../../../../trapigo/configs/trapigo-gateway-kube.yaml")
 	if err != nil {
 		t.Fatalf("LoadConfig returned an error: %v", err)
 	}
@@ -91,6 +92,9 @@ func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
 	}
 	if cfg.Keycloak.InternalRealmURL != "http://keycloak:8080/auth/realms/CompanyRealmA" {
 		t.Fatalf("unexpected internal keycloak realm URL: %s", cfg.Keycloak.InternalRealmURL)
+	}
+	if cfg.Keycloak.ClientSecret != "test-client-secret" {
+		t.Fatal("expected client secret to be expanded from the environment")
 	}
 
 	router, ok := cfg.HTTP.Routers["go-orders-router"]
@@ -108,8 +112,40 @@ func TestLoadConfig_TrapigoGatewayIncludesGoOrderService(t *testing.T) {
 	if !ok {
 		t.Fatal("expected go-order-service to be present")
 	}
-	if service.LoadBalancer.Servers[0].URL != "http://go-order-service:8080" {
-		t.Fatalf("unexpected go-order-service upstream: %s", service.LoadBalancer.Servers[0].URL)
+	if service.Kubernetes == nil {
+		t.Fatal("expected go-order-service to use Kubernetes endpoint discovery")
+	}
+	if service.Kubernetes.Service != "go-order-service" || service.Kubernetes.Port != "http" {
+		t.Fatalf("unexpected Kubernetes discovery target: %+v", service.Kubernetes)
+	}
+	if len(service.LoadBalancer.Servers) != 0 {
+		t.Fatal("expected Kubernetes service to have no static upstreams")
+	}
+}
+
+func TestLoadConfig_PodmanGatewayUsesStaticBackends(t *testing.T) {
+	t.Setenv("KEYCLOAK_CLIENT_SECRET", "test-client-secret")
+	cfg, err := LoadConfig("../../../../k8s/overlays/local-dev/gateway-config.yaml")
+	if err != nil {
+		t.Fatalf("LoadConfig returned an error: %v", err)
+	}
+	if cfg.Keycloak.ClientSecret != "test-client-secret" {
+		t.Fatal("expected client secret to be expanded from the environment")
+	}
+	if cfg.Keycloak.RedirectURI != "http://localhost:8081/web/auth/callback" {
+		t.Fatalf("unexpected local callback: %s", cfg.Keycloak.RedirectURI)
+	}
+	for serviceName, expectedURL := range map[string]string{
+		"keycloak":         "http://keycloak:8080",
+		"go-order-service": "http://go-order-service:8080",
+	} {
+		service, ok := cfg.HTTP.Services[serviceName]
+		if !ok || service.Kubernetes != nil || len(service.LoadBalancer.Servers) != 1 {
+			t.Fatalf("expected one static backend for %s, got %+v", serviceName, service)
+		}
+		if service.LoadBalancer.Servers[0].URL != expectedURL {
+			t.Fatalf("unexpected backend for %s: %s", serviceName, service.LoadBalancer.Servers[0].URL)
+		}
 	}
 }
 

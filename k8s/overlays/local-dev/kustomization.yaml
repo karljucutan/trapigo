@@ -8,6 +8,11 @@ sortOptions:
 images:
   - name: localhost/trapigo
     newTag: dev
+configMapGenerator:
+  - name: trapigo-gateway-config
+    behavior: replace
+    files:
+      - trapigo-gateway-kube.yaml=gateway-config.yaml
 patches:
   - target:
       group: apps
@@ -59,9 +64,6 @@ patches:
         name: trapigo
       spec:
         template:
-          metadata:
-            annotations:
-              container.seccomp.security.alpha.kubernetes.io/trapigo: unconfined
           spec:
             containers:
               - name: trapigo
@@ -71,20 +73,75 @@ patches:
                 ports:
                   - name: gateway
                     containerPort: 80
-                    hostPort: 80
+                    hostPort: 8081
                   - name: admin
                     containerPort: 8080
                     hostPort: 8080
                   - name: delve
                     containerPort: 40000
                     hostPort: 40000
-                volumeMounts:
-                  - name: trapigo-configs
-                    mountPath: /app/configs
-                    readOnly: true
-            volumes:
-              - name: trapigo-configs
-                hostPath:
-                  # Local-only source; the path must exist inside the Kind node.
-                  path: ./trapigo/configs
-                  type: Directory
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+    patch: |
+      - op: replace
+        path: /apiVersion
+        value: v1
+      - op: replace
+        path: /kind
+        value: Pod
+      - op: move
+        from: /spec/template/spec
+        path: /spec
+  - target:
+      version: v1
+      kind: Service
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: unused
+  - target:
+      version: v1
+      kind: ServiceAccount
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: unused
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: Role
+    patch: |
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: unused
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: RoleBinding
+    patch: |
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: unused
+  - target:
+      version: v1
+      kind: Pod
+      name: trapigo
+    patch: |
+      - op: add
+        path: /metadata/annotations
+        value:
+          container.seccomp.security.alpha.kubernetes.io/trapigo: unconfined
+      - op: remove
+        path: /spec/serviceAccountName
+      - op: remove
+        path: /spec/containers/0/env/0
