@@ -1,5 +1,6 @@
 package bootstrap
 
+/*
 import (
 	"context"
 	"fmt"
@@ -153,3 +154,4 @@ func discoverKubernetesServers(ctx context.Context, client kubernetes.Interface,
 	}
 	return servers, nil
 }
+*/

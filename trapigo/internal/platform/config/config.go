@@ -74,15 +74,17 @@ type Router struct {
 }
 
 type Service struct {
-	LoadBalancer LoadBalancer             `yaml:"load-balancer"`
-	Kubernetes   *KubernetesServiceConfig `yaml:"kubernetes,omitempty"`
-	RateLimit    *RateLimit               `yaml:"rate-limit,omitempty"`
+	LoadBalancer LoadBalancer `yaml:"load-balancer"`
+	/* Kubernetes   *KubernetesServiceConfig `yaml:"kubernetes,omitempty"` */
+	RateLimit *RateLimit `yaml:"rate-limit,omitempty"`
 }
 
+/*
 type KubernetesServiceConfig struct {
 	Service string `yaml:"service"`
 	Port    string `yaml:"port"`
 }
+*/
 
 type LoadBalancer struct {
 	Servers []Server `yaml:"servers"`

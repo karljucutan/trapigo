@@ -32,6 +32,36 @@ Then attach your debugger to:
 - Host: `localhost`
 - Port: `40000`
 
+## Podman Compose Commands
+
+When running with Podman, use the same commands with `podman` in place of `docker`.
+
+### Start (build + run)
+
+```bash
+podman compose -f compose.yml up --build
+```
+
+### Stop and remove containers/network
+
+```bash
+podman compose down
+```
+
+### Run with Delve debugger
+
+```bash
+podman compose -f compose.yml -f compose.override.yml up --build
+```
+
+or
+
+```bash
+podman compose up --build
+```
+
+Then attach your debugger to `localhost:40000`.
+
 ## Deployment Manifests
 
 Manifests now live under [k8s](./k8s/README.md). The shared base contains

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 
 	authgateway "github.com/karljucutan/trapigo/trapigo/internal/features/auth/gateway"
@@ -34,11 +33,12 @@ func loadGatewayConfig() (*config.Config, error) {
 }
 
 func buildLoadBalancer(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[string]*routeProxy, error) {
-	kubernetesBuilder := &kubernetesBackendBuilder{namespace: os.Getenv("POD_NAMESPACE")}
-	return buildLoadBalancerWithDiscovery(httpCfg, kubernetesBuilder)
+	/* kubernetesBuilder := &kubernetesBackendBuilder{namespace: os.Getenv("POD_NAMESPACE")}
+	return buildLoadBalancerWithDiscovery(httpCfg, kubernetesBuilder) */
+	return buildLoadBalancerWithStaticServers(httpCfg)
 }
 
-func buildLoadBalancerWithDiscovery(httpCfg config.HTTPConfig, kubernetesBuilder *kubernetesBackendBuilder) (*domain.LoadBalancer, map[string]*routeProxy, error) {
+func buildLoadBalancerWithStaticServers(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[string]*routeProxy, error) {
 	loadBalancer := domain.NewLoadBalancer()
 	routeProxies := make(map[string]*routeProxy)
 
@@ -49,7 +49,7 @@ func buildLoadBalancerWithDiscovery(httpCfg config.HTTPConfig, kubernetesBuilder
 		}
 
 		servers := service.LoadBalancer.Servers
-		if service.Kubernetes != nil {
+		/* if service.Kubernetes != nil {
 			if len(servers) > 0 {
 				return nil, nil, fmt.Errorf("service %q for router %q must configure either static servers or kubernetes discovery, not both", router.Service, routerName)
 			}
@@ -58,9 +58,9 @@ func buildLoadBalancerWithDiscovery(httpCfg config.HTTPConfig, kubernetesBuilder
 				return nil, nil, fmt.Errorf("discover Kubernetes backends for service %q: %w", router.Service, err)
 			}
 			servers = discovered
-		}
+		} */
 		if len(servers) == 0 {
-			return nil, nil, fmt.Errorf("service %q for router %q has no configured or discovered backends", router.Service, routerName)
+			return nil, nil, fmt.Errorf("service %q for router %q has no configured backends", router.Service, routerName)
 		}
 
 		lbRouter := domain.NewRouter(
