@@ -21,6 +21,7 @@ type LoginCommand struct {
 	IdentityProvider application.IdentityProvider
 	StateStore       LoginStateStore
 	StateTTL         time.Duration
+	RequiredScopes   []string
 }
 
 func (c *LoginCommand) Execute(ctx context.Context, returnURL string) (string, error) {
@@ -50,11 +51,12 @@ func (c *LoginCommand) Execute(ctx context.Context, returnURL string) (string, e
 		return "", err
 	}
 
+	scopes := append([]string{"openid", "profile", "email"}, c.RequiredScopes...)
 	redirectURL, err := c.IdentityProvider.BuildAuthorizationURL(ctx, infrastructure.AuthorizationURLParams{
 		State:         state,
 		Nonce:         nonce,
 		CodeChallenge: codeChallenge,
-		Scopes:        []string{"openid", "profile", "email"},
+		Scopes:        scopes,
 	})
 	if err != nil {
 		return "", err

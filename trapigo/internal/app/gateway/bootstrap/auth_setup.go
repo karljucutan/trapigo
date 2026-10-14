@@ -49,6 +49,7 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 		IdentityProvider: keycloakClient,
 		StateStore:       stateStore,
 		StateTTL:         stateTTL,
+		RequiredScopes:   cfg.Auth.RequiredScopes,
 	}
 	callbackCommand := &webcommand.CallbackCommand{
 		IdentityProvider: keycloakClient,

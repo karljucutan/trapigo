@@ -9,6 +9,8 @@ export type AuthConfig = {
   loginOrigin: string
 }
 
+const GATEWAY_REQUEST_TIMEOUT_MS = 5_000
+
 function configuredOrigin(value: string, name: string): string {
   const url = new URL(value)
   if (
@@ -89,7 +91,7 @@ export async function fetchGatewaySession(
       headers: cookies ? { Cookie: cookies } : {},
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(GATEWAY_REQUEST_TIMEOUT_MS),
     }
   )
   const rotatedCookies = response.headers
@@ -137,7 +139,7 @@ export async function callGatewayLogout(
       headers: cookies ? { Cookie: cookies } : {},
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(GATEWAY_REQUEST_TIMEOUT_MS),
     }
   )
   const rotatedCookies = response.headers

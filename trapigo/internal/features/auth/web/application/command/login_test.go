@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
@@ -18,28 +19,39 @@ func (s *loginStateCapture) Save(_ context.Context, state *domain.OAuthState) er
 	return nil
 }
 
-type loginClientStub struct{}
+type loginClientStub struct {
+	scopes []string
+}
 
-func (loginClientStub) BuildAuthorizationURL(_ context.Context, params infrastructure.AuthorizationURLParams) (string, error) {
+func (client *loginClientStub) BuildAuthorizationURL(_ context.Context, params infrastructure.AuthorizationURLParams) (string, error) {
+	client.scopes = params.Scopes
 	return "https://id.example.com/login?state=" + params.State, nil
 }
 
-func (loginClientStub) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
+func (*loginClientStub) ExchangeAuthorizationCode(context.Context, string, string) (*oauth2.Token, error) {
 	return nil, nil
 }
 
-func (loginClientStub) EndSession(context.Context, string) error {
+func (*loginClientStub) EndSession(context.Context, string) error {
 	return nil
 }
 
 func TestLoginCommand_PreservesReturnURLInOAuthState(t *testing.T) {
 	store := &loginStateCapture{}
-	cmd := &LoginCommand{IdentityProvider: loginClientStub{}, StateStore: store}
+	client := &loginClientStub{}
+	cmd := &LoginCommand{
+		IdentityProvider: client,
+		StateStore:       store,
+		RequiredScopes:   []string{"trapigo-go-order-service"},
+	}
 	const returnURL = "http://localhost:3000/dashboard?tab=logs"
 	if _, err := cmd.Execute(context.Background(), returnURL); err != nil {
 		t.Fatal(err)
 	}
 	if store.state == nil || !store.state.Valid() || store.state.ReturnURL != returnURL {
 		t.Fatalf("unexpected OAuth state: %+v", store.state)
+	}
+	if got := strings.Join(client.scopes, " "); got != "openid profile email trapigo-go-order-service" {
+		t.Fatalf("unexpected OAuth scopes: %s", got)
 	}
 }

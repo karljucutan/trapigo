@@ -46,7 +46,7 @@ keycloak:
   issuer_url: http://localhost:8081/auth/realms/CompanyRealmA
   internal_realm_url: http://keycloak:8080/auth/realms/CompanyRealmA
   client_id: trapigo-apigateway
-  client_secret: nNHJna7snaxYCL62mKLwC5fRFnuEe6ma5RBWANyZElxknyXhM2dyMgCR01oVTP7hPzt69DfRZd0RKJhgfwPN7s # Secret; use a secret store outside local development.
+  client_secret: maGEkzIlbihQbOD1X45Ze7S8uS1nHyxTyCsclR1lWcsQZHDuO55l0u04feQGKD7ueE9UQoshFeKH2jCZhBLjm8 # Secret; use a secret store outside local development.
   redirect_uri: http://localhost:8081/web/auth/callback
 
 auth:
@@ -54,7 +54,7 @@ auth:
   cookie_same_site: Lax
   state_expiration_seconds: 600
   jwt_cache_ttl_seconds: 3600
-  required_scopes: []
+  required_scopes: ["trapigo-go-order-service"]
   frontend_redirect_url: http://localhost:3000
 
 allowed_origins:
