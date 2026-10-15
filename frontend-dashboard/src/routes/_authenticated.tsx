@@ -3,28 +3,28 @@ import {
   Outlet,
   redirect,
   useRouter,
-} from "@tanstack/react-router"
-import { getRouteSession } from "@/server/auth.functions"
-import { Button } from "@/components/ui/button"
-import { AppNav } from "@/components/app-nav"
+} from "@tanstack/react-router";
+import { AppNav } from "@/components/app-nav";
+import { Button } from "@/components/ui/button";
+import { getRouteSession } from "@/server/auth.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
-    const { user, loginHref } = await getRouteSession({ data: location.href })
+    const { user, loginHref } = await getRouteSession({ data: location.href });
     if (!user) {
       throw redirect({
         href: loginHref,
         headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
-      })
+      });
     }
-    return { user }
+    return { user };
   },
   component: AuthLayout,
   errorComponent: AuthError,
-})
+});
 
 function AuthLayout() {
-  const { user } = Route.useRouteContext()
+  const { user } = Route.useRouteContext();
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -33,11 +33,11 @@ function AuthLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
 
 function AuthError({ reset }: { reset: () => void }) {
-  const router = useRouter()
+  const router = useRouter();
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-6">
@@ -46,5 +46,5 @@ function AuthError({ reset }: { reset: () => void }) {
         Try again
       </Button>
     </main>
-  )
+  );
 }

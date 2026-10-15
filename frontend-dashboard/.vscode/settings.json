@@ -1,24 +1,54 @@
 {
-  "eslint.probe": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+  "eslint.probe": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
   "eslint.runtime": "./node_modules/.bin/node",
   "eslint.nodePath": "./node_modules",
   "eslint.workingDirectories": ["./"],
   "[javascript]": {
-    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
+      "source.organizeImports.biome": "explicit",
       "source.fixAll.eslint": "explicit"
     }
   },
-  "[typescript]": {
-    "editor.formatOnSave": false,
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
+      "source.organizeImports.biome": "explicit"
+    }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports.biome": "explicit",
       "source.fixAll.eslint": "explicit"
     }
   },
   "[typescriptreact]": {
-    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
+      "source.organizeImports.biome": "explicit",
       "source.fixAll.eslint": "explicit"
     }
+  },
+  "[css]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
   }
 }

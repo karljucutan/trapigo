@@ -1,32 +1,32 @@
-import { useState } from "react"
-import { useServerFn } from "@tanstack/react-start"
-import { Button } from "@/components/ui/button"
-import { handleLogout } from "@/server/auth.functions"
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { handleLogout } from "@/server/auth.functions";
 
 interface AppNavProps {
   user?: {
-    email?: string
-    name?: string
-    username?: string
-    subject?: string
-  }
+    email?: string;
+    name?: string;
+    username?: string;
+    subject?: string;
+  };
 }
 
 export function AppNav({ user }: AppNavProps) {
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const logout = useServerFn(handleLogout)
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logout = useServerFn(handleLogout);
 
   const onLogout = async () => {
-    setIsLoggingOut(true)
+    setIsLoggingOut(true);
     try {
-      await logout()
+      await logout();
     } catch (error) {
-      setIsLoggingOut(false)
-      console.error("Logout failed:", error)
+      setIsLoggingOut(false);
+      console.error("Logout failed:", error);
     }
-  }
+  };
 
-  const displayName = user?.username || user?.email || "User"
+  const displayName = user?.username || user?.email || "User";
 
   return (
     <nav className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
@@ -48,5 +48,5 @@ export function AppNav({ user }: AppNavProps) {
         </Button>
       </div>
     </nav>
-  )
+  );
 }

@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
-import { Button } from "@/components/ui/button"
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/")({ component: App })
+export const Route = createFileRoute("/")({ component: App });
 
 function App() {
   return (
@@ -13,5 +13,5 @@ function App() {
         View Dashboard
       </Button>
     </main>
-  )
+  );
 }
