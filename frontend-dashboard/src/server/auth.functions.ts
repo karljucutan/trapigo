@@ -2,7 +2,6 @@ import { redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import {
   getRequestHeader,
-  getResponseHeaders,
   setResponseHeader,
 } from "@tanstack/react-start/server";
 import { getCurrentUser } from "./auth.server";
@@ -33,9 +32,8 @@ export const handleLogout = createServerFn({ method: "POST" }).handler(
     setResponseHeader("Cache-Control", "private, no-store");
     setResponseHeader("Vary", "Cookie");
 
-    // Set logout cookies on response
-    for (const cookie of cookies) {
-      getResponseHeaders().append("Set-Cookie", cookie);
+    if (cookies.length > 0) {
+      setResponseHeader("Set-Cookie", cookies);
     }
 
     throw redirect({ to: "/" });

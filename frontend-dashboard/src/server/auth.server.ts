@@ -1,6 +1,5 @@
 import {
   getRequestHeader,
-  getResponseHeaders,
   setResponseHeader,
 } from "@tanstack/react-start/server";
 import { fetchGatewaySession, getAuthConfig } from "./auth-gateway.server";
@@ -12,9 +11,8 @@ export async function getCurrentUser() {
     getRequestHeader("cookie") ?? "",
     getAuthConfig(),
   );
-  // Preserve gateway refresh/clear cookies on both SSR and server-function responses.
-  for (const cookie of session.cookies) {
-    getResponseHeaders().append("Set-Cookie", cookie);
+  if (session.cookies.length > 0) {
+    setResponseHeader("Set-Cookie", session.cookies);
   }
   return session.user;
 }

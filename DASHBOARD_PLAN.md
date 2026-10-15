@@ -141,7 +141,48 @@ The YAML config uses `refill-rate: 1.67`, while the config and limiter fields
 are integers. Verify decoding and preserve fractional refill using `float64`
 with a regression test. Do not assume this already causes startup failure.
 
-## Phase 1: Observability Infrastructure
+## Phase 1: Custom Dashboard Foundation
+
+1. Replace the placeholder with an unframed flow diagram and compact controls.
+   Use React Flow (`@xyflow/react`) for the diagram, its built-in handles and
+   edges for connections, and existing shadcn primitives, Tailwind styling, and
+   lucide icons for node content and controls. Reuse built-in animated edges
+   where appropriate; do not manually implement connector geometry. Lock node
+   editing for this showcase; enable accessible viewport controls as needed.
+2. Show gateway policies in execution order. Display three initial replica
+   slots as configured topology, without fabricated health indicators. Prepare
+   the layout to align them with actual replica metadata in Phase 6.
+3. Add timing, result, bounded recent-history, and expandable parent/child
+   timeline areas. Show an explicit not-connected state, unavailable timings,
+   and no observed selection. Keep traffic controls disabled until Phase 6.
+   Do not simulate application traffic, routing, or replica health.
+4. Use responsive desktop and mobile layouts with stable nodes, readable
+   timing labels, keyboard-accessible controls, and no content overlap. Use
+   explicit positions for the small fixed topology and React Flow's viewport
+   fitting; do not build a custom layout engine. If topology becomes dynamic,
+   evaluate an established layout library such as ELK or Dagre.
+5. Respect reduced motion and verify desktop/mobile layout and accessibility.
+   This phase delivers the disconnected UI shell, not working requests or
+   telemetry-backed animations.
+
+## Phase 2: UI Data Contract
+
+1. Define shared, bounded types for the real request result and trace evidence:
+   correlated trace ID, HTTP status, retry information, trace availability,
+   parent/child relationships, policy outcomes, selected public replica,
+   delivery evidence, and span durations with explicit measurement boundaries.
+2. Represent not-connected, in-flight, waiting-for-trace, partial, available,
+   and unavailable states explicitly. Missing evidence must not imply a
+   successful policy, selected destination, delivery, or zero-duration result.
+3. Connect presentational components to the contract without adding network
+   calls or enabling traffic controls. Use test-only fixtures to verify observed
+   routing, rejection, failure, and incomplete-data visual states; never use
+   fixtures as runtime fallback data or simulated application traffic.
+4. Keep backend URLs, sensitive attributes, and raw order data out of the
+   browser contract. Phase 5 must normalize authorized trace evidence into
+   this contract; Phase 6 wires the real request lifecycle.
+
+## Phase 3: Observability Infrastructure
 
 1. Add version-pinned Jaeger, Prometheus, Grafana, and OTel Collector services
    and task-specific configuration files to Compose. Do not change order-service
@@ -166,7 +207,7 @@ with a regression test. Do not assume this already causes startup failure.
    normal gateway traffic; configure timeouts and bounded resource use. Document
    shutdown flushing and failure behavior.
 
-## Phase 2: Go Gateway and Service Instrumentation
+## Phase 4: Go Gateway and Service Instrumentation
 
 1. Add fractional-refill regression coverage and fix precision if confirmed.
 2. Initialize OTel SDK resources and OTLP exporters in the gateway and orders
@@ -191,7 +232,7 @@ with a regression test. Do not assume this already causes startup failure.
    Do not change round-robin rules or manufacture backend health. Preserve
    normal streaming, proxy cancellation, and response error handling.
 
-## Phase 3: BFF, Browser, and Secure Trace Retrieval
+## Phase 5: BFF, Browser, and Secure Trace Retrieval
 
 1. Initialize Node OTel before instrumented modules load. Verify TanStack Start
    server request and outgoing fetch instrumentation; cover unsupported boundaries
@@ -214,7 +255,7 @@ with a regression test. Do not assume this already causes startup failure.
    Use an expiring bounded registry for a single-BFF demo; use a shared store for
    multiple BFF instances. No unrestricted trace search or client-chosen backend
    URL. Verify refreshed session identity and avoid cross-user data exposure.
-7. Normalize spans into a bounded UI contract with parent relationships,
+7. Normalize spans into the Phase 2 bounded UI contract with parent relationships,
    durations, policy evidence, and public replica labels. Missing/incomplete
    traces remain explicit, not fabricated destinations or zero-duration success.
 8. Use browser OTel request/interaction spans to include the actual browser
@@ -225,17 +266,14 @@ with a regression test. Do not assume this already causes startup failure.
 9. Ensure trace-query requests and telemetry-ingress traffic do not pollute the
    showcased business trace or create recursive telemetry/export behavior.
 
-## Phase 4: Custom Dashboard
+## Phase 6: Real-Data Dashboard Integration
 
-1. Replace the placeholder with an unframed flow diagram and compact controls.
-   Use React Flow (`@xyflow/react`) for the diagram, its built-in handles and
-   edges for connections, and existing shadcn primitives, Tailwind styling, and
-   lucide icons for node content and controls. Reuse built-in animated edges
-   where appropriate; do not manually implement connector geometry. Lock node
-   editing for this showcase; enable accessible viewport controls as needed.
-2. Show gateway policies in execution order. Display three initial replica
-   slots as configured topology, without fabricated health indicators; align
-   them with actual replica metadata when available.
+1. Connect the Phase 1 UI through the Phase 2 contract to the real request and
+   protected trace-query operations from Phase 5. Enable Send Request and
+   Start/Stop Traffic only when the real request path is connected.
+2. Populate gateway policy outcomes and align replica slots with actual replica
+   metadata when available. Preserve configured topology without inventing
+   observed routing or backend health.
 3. Show an in-flight state without guessing the destination. On completion,
    animate the observed path, selected replica, and return path. Stop rejected
    flows at the reported stage; distinguish selection from successful delivery.
@@ -250,16 +288,13 @@ with a regression test. Do not assume this already causes startup failure.
    failure. Respect reduced motion. Use no artificial backend delays.
 7. Show bounded recent history and session-local per-replica selection counts.
    Do not claim these are global gateway metrics.
-8. Use responsive desktop and mobile layouts with stable nodes, readable
-   timing labels, keyboard-accessible controls, and no content overlap. Use
-   explicit positions for the small fixed topology and React Flow's viewport
-   fitting; do not build a custom layout engine. If topology becomes dynamic,
-   evaluate an established layout library such as ELK or Dagre.
+8. Reverify the Phase 1 responsive layout and accessibility with real trace data,
+   timing labels, history, and error states; prevent overlap and overflow.
 9. Show a waiting-for-trace state after the real response, with bounded retry and
     partial/unavailable results. Count the business request once regardless of
     polling. Grafana and Jaeger UIs remain separate optional debugging views.
 
-## Phase 5: Documentation and Handoff
+## Phase 7: Documentation and Handoff
 
 - Document Compose startup, instrumentation env vars, local monitoring URLs,
    retention, sampling, trace availability delay, and metrics semantics.
@@ -318,11 +353,17 @@ with a regression test. Do not assume this already causes startup failure.
 
 ## Selected Implementation Order
 
-1. Provision Collector, Jaeger, Prometheus, and Grafana.
-2. Instrument the Go gateway and orders service; verify traces and metrics.
-3. Instrument the BFF/browser and implement protected trace retrieval.
-4. Build the custom request-flow UI using actual trace data.
-5. Verify the complete workflow and document the monitoring views.
+Implement the numbered phases sequentially. Each phase is a separate development
+unit; run its relevant verification checks before proceeding. The UI-first order
+does not change the request or telemetry architecture.
+
+1. Custom dashboard foundation.
+2. UI data contract and test-only visual fixtures.
+3. Observability infrastructure.
+4. Go gateway and service instrumentation.
+5. BFF/browser instrumentation and protected trace retrieval.
+6. Real-data dashboard integration and observed-path animations.
+7. End-to-end verification, documentation, and handoff.
 
 The OTel/Jaeger/Prometheus/Grafana architecture replaces the earlier manual
 timing plan. This file records the agreed direction; it does not claim that
