@@ -25,7 +25,7 @@ import {
   Waypoints,
   Workflow,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import {
   Card,
@@ -176,48 +176,41 @@ function GatewayFlow() {
     return () => observer.disconnect();
   }, []);
 
-  const nodes = useMemo<DashboardFlowNode[]>(() => {
-    const isNarrow = canvasWidth < 480;
-    const cardWidth = isNarrow ? Math.max(280, canvasWidth - 36) : 360;
-    const x = Math.max(12, (canvasWidth - cardWidth) / 2);
+  const isNarrow = canvasWidth < 480;
+  const cardWidth = isNarrow ? Math.max(280, canvasWidth - 36) : 360;
+  const x = Math.max(12, (canvasWidth - cardWidth) / 2);
 
-    const stageNodes: StageFlowNode[] = stages.map((stage, index) => ({
-      id: `stage-${stage.number}`,
-      type: "stage",
-      position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 96 },
-      data: stage,
-      style: { width: cardWidth },
-      draggable: false,
-      selectable: false,
-    }));
+  const stageNodes: StageFlowNode[] = stages.map((stage, index) => ({
+    id: `stage-${stage.number}`,
+    type: "stage",
+    position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 96 },
+    data: stage,
+    style: { width: cardWidth },
+    draggable: false,
+    selectable: false,
+  }));
 
-    const poolNode: ReplicaPoolFlowNode = {
-      id: "replica-pool",
-      type: "replicaPool",
-      position: { x, y: 900 },
-      data: {
-        replicas: ["Replica 01", "Replica 02", "Replica 03"],
-      },
-      style: { width: cardWidth },
-      draggable: false,
-      selectable: false,
-    };
+  const poolNode: ReplicaPoolFlowNode = {
+    id: "replica-pool",
+    type: "replicaPool",
+    position: { x, y: 900 },
+    data: {
+      replicas: ["Replica 01", "Replica 02", "Replica 03"],
+    },
+    style: { width: cardWidth },
+    draggable: false,
+    selectable: false,
+  };
 
-    return [...stageNodes, poolNode];
-  }, [canvasWidth]);
-
-  const edges = useMemo<Edge[]>(
-    () =>
-      nodes.slice(0, -1).map((node, index) => ({
-        id: `edge-${node.id}-${nodes[index + 1]?.id}`,
-        source: node.id,
-        target: nodes[index + 1]?.id ?? "",
-        type: "smoothstep",
-        markerEnd: { type: MarkerType.ArrowClosed, color: "#cbd5e1" },
-        style: { stroke: "#cbd5e1", strokeWidth: 1.5 },
-      })),
-    [nodes],
-  );
+  const nodes: DashboardFlowNode[] = [...stageNodes, poolNode];
+  const edges: Edge[] = nodes.slice(0, -1).map((node, index) => ({
+    id: `edge-${node.id}-${nodes[index + 1]?.id}`,
+    source: node.id,
+    target: nodes[index + 1]?.id ?? "",
+    type: "smoothstep",
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#cbd5e1" },
+    style: { stroke: "#cbd5e1", strokeWidth: 1.5 },
+  }));
 
   useEffect(() => {
     if (canvasWidth > 0) {

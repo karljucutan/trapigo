@@ -2,6 +2,18 @@
 
 This is a template for a new TanStack Start project with React, TypeScript, and shadcn/ui.
 
+## React Compiler
+
+React Compiler is enabled in `vite.config.ts` through
+`@vitejs/plugin-react`'s `reactCompilerPreset` and `@rolldown/plugin-babel`.
+It uses the Babel compiler with the default React 19 target; no separate
+compiler runtime package is needed.
+
+The compiler automatically memoizes eligible components and calculations.
+Components use plain calculations rather than manual `useMemo` or `useCallback`
+wrappers. Effects, their dependency arrays, state, and refs are still needed
+where appropriate.
+
 ## Authentication
 
 The landing page is public. `/dashboard` is a child of the `_authenticated`
