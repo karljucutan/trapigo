@@ -43,6 +43,12 @@ type jwk struct {
 	E   string `json:"e"`
 }
 
+type idTokenClaims struct {
+	jwt.RegisteredClaims
+	Nonce           string `json:"nonce"`
+	AuthorizedParty string `json:"azp"`
+}
+
 func NewJWTValidator(issuerURL, clientID string, httpClient *http.Client) *JWTValidator {
 	return NewJWTValidatorWithJWKSCacheTTL(issuerURL, issuerURL, clientID, time.Hour, httpClient)
 }
@@ -154,6 +160,57 @@ func (v *JWTValidator) Validate(ctx context.Context, tokenString string) (*domai
 		}
 	}
 	return result, nil
+}
+
+func (v *JWTValidator) ValidateIDToken(ctx context.Context, tokenString, expectedNonce string) error {
+	if strings.TrimSpace(tokenString) == "" || strings.TrimSpace(expectedNonce) == "" || v.clientID == "" {
+		return domain.ErrInvalidJWT
+	}
+	if err := v.ensureJWKS(ctx); err != nil {
+		return err
+	}
+
+	claims := &idTokenClaims{}
+	parsed, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return nil, domain.ErrInvalidJWT
+		}
+		key, ok := v.lookupVerificationKey(kid)
+		if !ok {
+			if refreshErr := v.refreshJWKS(ctx, true); refreshErr != nil {
+				return nil, refreshErr
+			}
+			key, ok = v.lookupVerificationKey(kid)
+			if !ok {
+				return nil, fmt.Errorf("%w: unknown key id %s", domain.ErrInvalidJWT, kid)
+			}
+		}
+		return key, nil
+	},
+		jwt.WithValidMethods([]string{"RS256"}),
+		jwt.WithIssuer(v.issuerURL),
+		jwt.WithAudience(v.clientID),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+		jwt.WithLeeway(30*time.Second),
+	)
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return domain.ErrExpiredToken
+		}
+		return fmt.Errorf("%w: invalid ID token: %v", domain.ErrInvalidJWT, err)
+	}
+	if parsed == nil || !parsed.Valid || claims.Subject == "" || claims.IssuedAt == nil || claims.Nonce != expectedNonce {
+		return domain.ErrInvalidJWT
+	}
+	if claims.AuthorizedParty != "" && claims.AuthorizedParty != v.clientID {
+		return domain.ErrInvalidJWT
+	}
+	if len(claims.Audience) > 1 && claims.AuthorizedParty != v.clientID {
+		return domain.ErrInvalidJWT
+	}
+	return nil
 }
 
 func extractJWTExtras(tokenString string) (string, string, string) {

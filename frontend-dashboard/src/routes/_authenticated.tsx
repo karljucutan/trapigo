@@ -10,25 +10,27 @@ import { getRouteSession } from "@/server/auth.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
-    const { user, loginHref } = await getRouteSession({ data: location.href });
+    const { user, loginHref, logoutAction } = await getRouteSession({
+      data: location.href,
+    });
     if (!user) {
       throw redirect({
         href: loginHref,
         headers: { "Cache-Control": "private, no-store", Vary: "Cookie" },
       });
     }
-    return { user };
+    return { user, logoutAction };
   },
   component: AuthLayout,
   errorComponent: AuthError,
 });
 
 function AuthLayout() {
-  const { user } = Route.useRouteContext();
+  const { user, logoutAction } = Route.useRouteContext();
 
   return (
     <div className="flex min-h-svh flex-col">
-      <AppNav user={user} />
+      <AppNav user={user} logoutAction={logoutAction} />
       <main className="flex-1">
         <Outlet />
       </main>

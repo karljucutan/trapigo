@@ -59,3 +59,21 @@ func TestCookieManager_ExtractsToken(t *testing.T) {
 		t.Fatalf("expected token abc123, got %s", token)
 	}
 }
+
+func TestCookieManager_CreatesAndExtractsIDTokenCookie(t *testing.T) {
+	manager := NewCookieManager(true, http.SameSiteLaxMode, "/")
+	cookie := manager.IDTokenCookie("id-token-value", 5*time.Minute)
+	if cookie.Name != IDTokenCookieName || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("unexpected ID token cookie attributes: %#v", cookie)
+	}
+	if cookie.Value != "id-token-value" {
+		t.Fatalf("expected raw ID token cookie value, got %q", cookie.Value)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout", nil)
+	req.AddCookie(cookie)
+	got, ok := manager.ExtractIDToken(req)
+	if !ok || got != "id-token-value" {
+		t.Fatalf("unexpected extracted ID token: %q, %v", got, ok)
+	}
+}

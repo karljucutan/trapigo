@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -116,8 +117,16 @@ func TestDiscoverUsesInternalRealmURLAndPreservesPublicAuthorizationURL(t *testi
 	if doc.JWKSURI != internalEndpoint+"certs" {
 		t.Fatalf("expected internal JWKS endpoint, got %s", doc.JWKSURI)
 	}
-	if doc.EndSessionEndpoint != internalEndpoint+"logout" {
-		t.Fatalf("expected internal end-session endpoint, got %s", doc.EndSessionEndpoint)
+	if doc.EndSessionEndpoint != publicRealmURL+"/protocol/openid-connect/logout" {
+		t.Fatalf("expected public end-session endpoint, got %s", doc.EndSessionEndpoint)
+	}
+	logoutURL, err := client.BuildLogoutURL(context.Background(), "http://localhost:3000/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(logoutURL)
+	if err != nil || parsed.Host != "localhost:8081" {
+		t.Fatalf("expected browser-accessible logout URL, got %s, %v", logoutURL, err)
 	}
 }
 
@@ -173,7 +182,7 @@ func TestRefreshToken_SendsExpectedPayload(t *testing.T) {
 
 type tokenAssertion struct{}
 
-func TestEndSession(t *testing.T) {
+func TestBuildLogoutURL(t *testing.T) {
 	server := newMockOIDCServer(t, tokenAssertion{})
 	defer server.Close()
 
@@ -187,14 +196,95 @@ func TestEndSession(t *testing.T) {
 		t.Fatalf("NewClient returned error: %v", err)
 	}
 
-	if err := client.EndSession(context.Background(), "refresh-123"); err != nil {
-		t.Fatalf("expected success, got %v", err)
+	const returnURL = "https://app.example.com/?logged_out=true"
+	const idToken = "signed.id.token"
+	logoutURL, err := client.BuildLogoutURL(context.Background(), returnURL, idToken)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := client.EndSession(context.Background(), "expired"); err != nil {
-		t.Fatalf("expected invalid_grant to be treated as logged out, got %v", err)
+	parsed, err := url.Parse(logoutURL)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := client.EndSession(context.Background(), "boom"); err == nil {
-		t.Fatal("expected error for server failure")
+	if parsed.Scheme+"://"+parsed.Host+parsed.Path != server.URL+"/protocol/openid-connect/logout" {
+		t.Fatalf("unexpected logout endpoint: %s", logoutURL)
+	}
+	if parsed.Query().Get("client_id") != "trapigo-gateway" ||
+		parsed.Query().Get("post_logout_redirect_uri") != returnURL ||
+		parsed.Query().Get("id_token_hint") != idToken || len(parsed.Query()) != 3 {
+		t.Fatalf("unexpected logout parameters: %s", logoutURL)
+	}
+	logoutURL, err = client.BuildLogoutURL(context.Background(), returnURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err = url.Parse(logoutURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Query().Get("id_token_hint") != "" || len(parsed.Query()) != 2 {
+		t.Fatalf("expected logout URL without an ID token hint, got %s", logoutURL)
+	}
+	for _, invalid := range []string{"", "/dashboard", "//evil.example", "javascript:alert(1)", "https://user:pass@app.example.com", "https://app.example.com/#fragment"} {
+		if _, err := client.BuildLogoutURL(context.Background(), invalid, ""); err == nil {
+			t.Fatalf("expected invalid return URL %q to fail", invalid)
+		}
+	}
+}
+
+func TestBuildLogoutURL_DiscoveryFailures(t *testing.T) {
+	for _, scenario := range []string{"missing endpoint", "server error", "canceled context"} {
+		t.Run(scenario, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if scenario == "server error" {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"authorization_endpoint": "https://id.example.com/auth",
+					"token_endpoint":         "https://id.example.com/token",
+				})
+			}))
+			defer server.Close()
+			client, err := NewKeycloakClient(Config{
+				IssuerURL: server.URL, ClientID: "trapigo", RedirectURI: "https://app.example.com/callback",
+			}, server.Client())
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if scenario == "canceled context" {
+				cancel()
+			}
+			if _, err := client.BuildLogoutURL(ctx, "https://app.example.com/", ""); err == nil {
+				t.Fatal("expected logout preparation to fail")
+			}
+		})
+	}
+}
+
+type logoutDiscoveryTransport struct {
+	t *testing.T
+}
+
+func (s logoutDiscoveryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	deadline, ok := req.Context().Deadline()
+	if !ok || time.Until(deadline) <= 0 || time.Until(deadline) > logoutDiscoveryHTTPTimeout {
+		s.t.Errorf("expected discovery timeout bounded by %s", logoutDiscoveryHTTPTimeout)
+	}
+	return nil, context.DeadlineExceeded
+}
+
+func TestBuildLogoutURL_BoundsDiscoveryHTTPTime(t *testing.T) {
+	client, err := NewKeycloakClient(Config{
+		IssuerURL: "https://id.example.com", ClientID: "trapigo", RedirectURI: "https://app.example.com/callback",
+	}, &http.Client{Transport: logoutDiscoveryTransport{t: t}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.BuildLogoutURL(context.Background(), "https://app.example.com/", ""); err == nil {
+		t.Fatal("expected discovery timeout error")
 	}
 }
 
@@ -214,25 +304,8 @@ func newMockOIDCServer(t *testing.T, _ tokenAssertion) *httptest.Server {
 				"end_session_endpoint":   server.URL + "/protocol/openid-connect/logout",
 			})
 		case "/protocol/openid-connect/logout":
-			if req.Method != http.MethodPost {
-				t.Fatalf("expected POST method, got %s", req.Method)
-			}
-			if err := req.ParseForm(); err != nil {
-				t.Fatalf("failed to parse form: %v", err)
-			}
-			if req.PostForm.Get("client_id") != "trapigo-gateway" || req.PostForm.Get("client_secret") != "super-secret" {
-				t.Fatalf("unexpected client credentials: %v", req.PostForm)
-			}
-			switch req.PostForm.Get("refresh_token") {
-			case "refresh-123":
-				rw.WriteHeader(http.StatusNoContent)
-			case "expired":
-				rw.Header().Set("Content-Type", "application/json")
-				rw.WriteHeader(http.StatusBadRequest)
-				_, _ = rw.Write([]byte(`{"error":"invalid_grant"}`))
-			default:
-				rw.WriteHeader(http.StatusInternalServerError)
-			}
+			t.Error("BFF must not call the browser logout endpoint")
+			rw.WriteHeader(http.StatusInternalServerError)
 		case "/protocol/openid-connect/token":
 			if req.Method != http.MethodPost {
 				t.Fatalf("expected POST method, got %s", req.Method)

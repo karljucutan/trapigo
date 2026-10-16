@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -71,15 +72,16 @@ func TestHandleCallback_WithValidCodeAndState_SetsCookiesAndRedirects(t *testing
 	}
 
 	callbackCommand := &command.CallbackCommand{
-		IdentityProvider: callbackClientStub{token: &oauth2.Token{
+		IdentityProvider: callbackClientStub{token: (&oauth2.Token{
 			AccessToken:  buildSignedToken(t, issuer, "trapigo", key, time.Now().Add(10*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-123",
 			Expiry:       time.Now().Add(10 * time.Minute),
-		}},
-		StateStore: stateStore,
-		Validator:  validator,
+		}).WithExtra(map[string]any{"id_token": buildSignedIDToken(t, issuer, "trapigo", key, "nonce-123")})},
+		StateStore:       stateStore,
+		Validator:        validator,
+		IDTokenValidator: validator,
 	}
-	cookieManager := infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
+	cookieManager := mustCookieManager(t)
 	handler := &WebAuthHandler{
 		CallbackCommand: callbackCommand,
 		CookieManager:   cookieManager,
@@ -111,14 +113,15 @@ func TestHandleLoginAndCallback_ReturnsToDashboard(t *testing.T) {
 			StateStore:       stateStore,
 		},
 		CallbackCommand: &command.CallbackCommand{
-			IdentityProvider: callbackClientStub{token: &oauth2.Token{
+			IdentityProvider: callbackClientStub{token: (&oauth2.Token{
 				AccessToken: buildSignedToken(t, issuer, "trapigo", key, time.Now().Add(10*time.Minute), time.Now().Add(-time.Minute)),
 				Expiry:      time.Now().Add(10 * time.Minute),
-			}},
-			StateStore: stateStore,
-			Validator:  validator,
+			}).WithExtra(map[string]any{"id_token": buildSignedIDToken(t, issuer, "trapigo", key, "n")})},
+			StateStore:       stateStore,
+			Validator:        validator,
+			IDTokenValidator: acceptingIDTokenValidatorStub{},
 		},
-		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
+		CookieManager: mustCookieManager(t),
 		FrontendURL:   "http://localhost:3000",
 	}
 	const returnURL = "http://localhost:3000/dashboard?tab=logs#latest"
@@ -158,8 +161,8 @@ func (stateReturningLoginClient) ExchangeAuthorizationCode(context.Context, stri
 	return nil, nil
 }
 
-func (stateReturningLoginClient) EndSession(context.Context, string) error {
-	return nil
+func (stateReturningLoginClient) BuildLogoutURL(context.Context, string, string) (string, error) {
+	return "", nil
 }
 
 func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) {
@@ -201,29 +204,70 @@ func TestHandleCallback_InvalidOrExpiredState_ReturnsUnauthorized(t *testing.T) 
 }
 
 func TestHandleLogout_ClearsCookies(t *testing.T) {
+	cookieManager := mustCookieManager(t)
+	idTokenCookie := cookieManager.IDTokenCookie("id-token-value", 30*time.Minute)
 	handler := &WebAuthHandler{
-		LogoutCommand: &command.LogoutCommand{},
-		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
+		LogoutCommand: &command.LogoutCommand{IdentityProvider: loginClientStub{}},
+		CookieManager: cookieManager,
+		FrontendURL:   "http://localhost:3000",
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.AddCookie(&http.Cookie{Name: infrastructure.RefreshTokenCookieName, Value: "refresh-123"})
+	req.AddCookie(idTokenCookie)
 	res := httptest.NewRecorder()
 	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
 	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
 	originMiddleware(http.HandlerFunc(handler.HandleLogout)).ServeHTTP(res, req)
 
-	if res.Code != http.StatusOK {
-		t.Fatalf("expected %d, got %d", http.StatusOK, res.Code)
+	if res.Code != http.StatusSeeOther {
+		t.Fatalf("expected %d, got %d", http.StatusSeeOther, res.Code)
 	}
-	body := res.Body.String()
-	if !strings.Contains(body, "logged_out") {
-		t.Fatalf("unexpected body: %s", body)
+	if res.Header().Get("Location") != "https://id.example.com/logout?id_token_hint=id-token-value" {
+		t.Fatalf("unexpected logout redirect: %s", res.Header().Get("Location"))
 	}
 	cookies := res.Result().Cookies()
-	if len(cookies) < 2 {
+	if len(cookies) != 3 {
 		t.Fatalf("expected clear cookies, got %d", len(cookies))
+	}
+	for _, cookie := range cookies {
+		if cookie.Value != "" || cookie.MaxAge >= 0 || cookie.Path != "/" || !cookie.HttpOnly {
+			t.Fatalf("invalid cookie deletion: %s", cookie)
+		}
+	}
+	if res.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("unexpected logout headers: %v", res.Header())
+	}
+}
+
+func TestHandleLogout_FailureStillClearsCookies(t *testing.T) {
+	handler := &WebAuthHandler{
+		LogoutCommand: &command.LogoutCommand{},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
+	}
+	res := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	handler.HandleLogout(res, req)
+	if res.Code != http.StatusBadGateway || len(res.Result().Cookies()) != 3 ||
+		res.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("expected explicit error and local cookie clearing, got %d %v", res.Code, res.Header())
+	}
+}
+
+func TestHandleLogout_WithoutCookiesStillPreparesSSOLogout(t *testing.T) {
+	handler := &WebAuthHandler{
+		LogoutCommand: &command.LogoutCommand{IdentityProvider: loginClientStub{}},
+		CookieManager: infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/"),
+		FrontendURL:   "http://localhost:3000",
+	}
+	res := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/web/auth/logout?return_to=https://evil.example", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	handler.HandleLogout(res, req)
+	if res.Code != http.StatusSeeOther {
+		t.Fatalf("expected logout without tokens, got %d: %s", res.Code, res.Body.String())
 	}
 }
 
@@ -335,8 +379,17 @@ func (loginClientStub) ExchangeAuthorizationCode(context.Context, string, string
 	return nil, nil
 }
 
-func (loginClientStub) EndSession(context.Context, string) error {
-	return nil
+func (loginClientStub) BuildLogoutURL(_ context.Context, returnURL, idToken string) (string, error) {
+	if returnURL != "http://localhost:3000" {
+		return "", fmt.Errorf("unexpected return URL: %s", returnURL)
+	}
+	if idToken != "" {
+		if idToken != "id-token-value" {
+			return "", fmt.Errorf("unexpected ID token hint: %s", idToken)
+		}
+		return "https://id.example.com/logout?id_token_hint=" + idToken, nil
+	}
+	return "https://id.example.com/logout", nil
 }
 
 type callbackClientStub struct {
@@ -351,12 +404,18 @@ func (callbackClientStub) BuildAuthorizationURL(context.Context, infrastructure.
 	return "", nil
 }
 
-func (callbackClientStub) EndSession(context.Context, string) error {
-	return nil
+func (callbackClientStub) BuildLogoutURL(context.Context, string, string) (string, error) {
+	return "", nil
 }
 
 type tokenValidatorStub struct {
 	claims *domain.Claims
+}
+
+type acceptingIDTokenValidatorStub struct{}
+
+func (acceptingIDTokenValidatorStub) ValidateIDToken(context.Context, string, string) error {
+	return nil
 }
 
 func (s tokenValidatorStub) Validate(ctx context.Context, token string) (*domain.Claims, error) {
@@ -415,4 +474,28 @@ func buildSignedToken(t *testing.T, issuer, clientID string, key *rsa.PrivateKey
 		t.Fatalf("sign token: %v", err)
 	}
 	return str
+}
+
+func buildSignedIDToken(t *testing.T, issuer, clientID string, key *rsa.PrivateKey, nonce string) string {
+	t.Helper()
+	claims := jwt.MapClaims{
+		"iss":   issuer,
+		"sub":   "user-1",
+		"aud":   clientID,
+		"exp":   time.Now().Add(10 * time.Minute).Unix(),
+		"iat":   time.Now().Add(-time.Minute).Unix(),
+		"nonce": nonce,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = "test-key"
+	signed, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign ID token: %v", err)
+	}
+	return signed
+}
+
+func mustCookieManager(t *testing.T) *infrastructure.CookieManager {
+	t.Helper()
+	return infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
 }

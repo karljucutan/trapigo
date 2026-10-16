@@ -254,6 +254,7 @@ Recommended initial design:
 ```http
 Set-Cookie: web_access_token=<access_token>; HttpOnly; Secure; SameSite=Lax; Path=/
 Set-Cookie: web_refresh_token=<refresh_token>; HttpOnly; Secure; SameSite=Lax; Path=/
+Set-Cookie: web_id_token=<id_token>; HttpOnly; Secure; SameSite=Lax; Path=/
 ```
 
 Recommended cookie properties:
@@ -284,9 +285,10 @@ Cookie names:
 ```text
 web_access_token
 web_refresh_token
+web_id_token
 ```
 
-The browser frontend does not access these cookies through JavaScript.
+The browser frontend does not access these cookies through JavaScript. The ID token is validated at the callback, then stored as a raw cookie value with the same HttpOnly, Secure, and SameSite attributes as the access and refresh tokens. It is used only by the gateway as the `id_token_hint` during logout.
 
 ---
 
@@ -607,23 +609,53 @@ or a suitable application-specific unauthenticated response.
 POST /web/auth/logout
 ```
 
-or, if the application's navigation requires it:
-
-```http
-GET /web/auth/logout
-```
-
-Prefer `POST` for an application state-changing logout operation.
+Use `POST` because logout changes application authentication state. Apply the CSRF protections described in section 17.
 
 Gateway responsibilities:
 
 1. Clear `web_access_token`.
 2. Clear `web_refresh_token`.
-3. Optionally revoke the refresh token through Keycloak.
-4. Optionally perform Keycloak OIDC logout when full SSO logout is required.
-5. Redirect the browser to the application login/home page when appropriate.
+3. Read `web_id_token` as the logout hint, then clear it.
+4. Build a Keycloak RP-Initiated Logout URL from the discovered `end_session_endpoint`, including `id_token_hint` when available.
+5. Respond with a `303 See Other` redirect to Keycloak.
+
+The intended user-facing operation is full SSO logout, not just local cookie deletion. Do not POST the refresh token and client credentials to Keycloak's logout endpoint. Keycloak supports that server-to-server request as a non-standard legacy flow, but does not recommend it for applications.
 
 Cookie deletion must use compatible cookie attributes, especially the same cookie name/path/domain combination.
+
+## Browser logout flow
+
+```text
+Browser -> BFF: POST /web/auth/logout
+BFF -> Browser: clear Trapigo cookies; 303 redirect to Keycloak
+Browser -> Keycloak: follow redirect as a top-level navigation
+Keycloak -> Browser: terminate SSO session and clear Keycloak cookies
+Keycloak -> Application: redirect to the configured post-logout return URL
+```
+
+The dashboard submits a browser form directly to the gateway; it must not proxy logout through a server function or expose the hint-bearing Keycloak URL to JavaScript. Require an allowed `Origin` header for this POST. The browser automatically includes applicable Keycloak cookies according to their domain, path, Secure, and SameSite rules. The BFF must not read or forward those cookies.
+
+Build the logout URL with:
+
+- `client_id` identifying the configured Keycloak client.
+- `post_logout_redirect_uri` taken from trusted application configuration and registered in the Keycloak client's Valid Post Logout Redirect URIs. Do not accept an arbitrary browser-supplied return URL.
+- `id_token_hint` from the ID-token cookie. This is an ID token, not an access or refresh token. If an older session has no usable ID-token cookie, omit the hint; Keycloak may require user confirmation before ending the session.
+
+Never include an access token, refresh token, or client secret in the logout URL. Return the response with `Cache-Control: no-store`.
+
+Clear Trapigo cookies even if discovery or logout URL construction fails, but return an explicit error rather than claiming full SSO logout succeeded. A successful `303` only starts browser logout; Keycloak logout is not complete until the browser visits Keycloak and finishes any required confirmation.
+
+## Local logout versus token revocation
+
+- Clearing only Trapigo cookies is local logout. An active Keycloak SSO session can allow a later login flow to authenticate without prompting for credentials.
+- Token revocation is a separate, valid server-to-server operation using Keycloak's `/protocol/openid-connect/revoke` endpoint. It is not equivalent to browser SSO logout and is not required as an additional step in this flow.
+- Do not routinely combine the legacy refresh-token logout POST with browser RP-Initiated Logout.
+- Clearing cookies does not itself invalidate copies of already-issued access tokens. Stateless JWT validation can continue accepting them until expiry unless a separate invalidation mechanism is implemented.
+
+References:
+
+- [Keycloak logout and revocation endpoints](https://www.keycloak.org/securing-apps/oidc-layers)
+- [OpenID Connect RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)
 
 ---
 
@@ -801,6 +833,7 @@ Recommended:
 ```text
 web_access_token
 web_refresh_token
+web_id_token
 ```
 
 Do not expose the tokens through a response JSON object such as:

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/application"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"golang.org/x/oauth2"
@@ -15,6 +14,10 @@ type CallbackTokenValidator interface {
 	Validate(ctx context.Context, token string) (*domain.Claims, error)
 }
 
+type CallbackIDTokenValidator interface {
+	ValidateIDToken(ctx context.Context, token, expectedNonce string) error
+}
+
 type CallbackStateStore interface {
 	Get(ctx context.Context, stateValue string) (*domain.OAuthState, error)
 	Delete(ctx context.Context, stateValue string) error
@@ -22,6 +25,7 @@ type CallbackStateStore interface {
 
 type CallbackResult struct {
 	Token     *oauth2.Token
+	IDToken   string
 	Claims    *domain.Claims
 	ReturnURL string
 }
@@ -30,13 +34,14 @@ type CallbackCommand struct {
 	IdentityProvider application.IdentityProvider
 	StateStore       CallbackStateStore
 	Validator        CallbackTokenValidator
+	IDTokenValidator CallbackIDTokenValidator
 }
 
 func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*CallbackResult, error) {
 	if strings.TrimSpace(code) == "" || strings.TrimSpace(state) == "" {
 		return nil, domain.ErrInvalidCallback
 	}
-	if c.IdentityProvider == nil || c.StateStore == nil || c.Validator == nil {
+	if c.IdentityProvider == nil || c.StateStore == nil || c.Validator == nil || c.IDTokenValidator == nil {
 		return nil, fmt.Errorf("callback command misconfigured")
 	}
 
@@ -52,7 +57,14 @@ func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*Cal
 	if err != nil {
 		return nil, err
 	}
-	if err := validateIDTokenNonce(token, oauthState.Nonce); err != nil {
+	if token == nil {
+		return nil, domain.ErrInvalidCallback
+	}
+	idToken, ok := token.Extra("id_token").(string)
+	if !ok || strings.TrimSpace(idToken) == "" {
+		return nil, domain.ErrInvalidCallback
+	}
+	if err := c.IDTokenValidator.ValidateIDToken(ctx, idToken, oauthState.Nonce); err != nil {
 		return nil, err
 	}
 	claims, err := c.Validator.Validate(ctx, token.AccessToken)
@@ -63,26 +75,5 @@ func (c *CallbackCommand) Execute(ctx context.Context, code, state string) (*Cal
 		return nil, err
 	}
 
-	return &CallbackResult{Token: token, Claims: claims, ReturnURL: oauthState.ReturnURL}, nil
-}
-
-func validateIDTokenNonce(token *oauth2.Token, expectedNonce string) error {
-	if token == nil {
-		return domain.ErrInvalidCallback
-	}
-	idToken, ok := token.Extra("id_token").(string)
-	if !ok || strings.TrimSpace(idToken) == "" {
-		return nil
-	}
-
-	claims := jwt.MapClaims{}
-	_, _, err := new(jwt.Parser).ParseUnverified(idToken, claims)
-	if err != nil {
-		return domain.ErrInvalidCallback
-	}
-	nonce, _ := claims["nonce"].(string)
-	if strings.TrimSpace(nonce) == "" || nonce != expectedNonce {
-		return domain.ErrInvalidCallback
-	}
-	return nil
+	return &CallbackResult{Token: token, IDToken: idToken, Claims: claims, ReturnURL: oauthState.ReturnURL}, nil
 }

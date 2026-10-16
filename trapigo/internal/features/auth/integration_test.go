@@ -201,24 +201,26 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 	validator, issuer, key := newValidatorForIntegrationTest(t)
 	stateStore := infrastructure.NewInMemoryOAuthStateStore(5 * time.Minute)
 	cookieManager := infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
+	idToken := buildIDToken(t, issuer, "trapigo", key, "n")
 
 	loginCommand := &webcommand.LoginCommand{
 		IdentityProvider: browserLoginClientStub{authURL: "https://keycloak.example.com/auth"},
 		StateStore:       stateStore,
 	}
 	callbackCommand := &webcommand.CallbackCommand{
-		IdentityProvider: browserCallbackClientStub{token: &oauth2.Token{
+		IdentityProvider: browserCallbackClientStub{token: (&oauth2.Token{
 			AccessToken:  buildToken(t, issuer, "trapigo", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-xyz",
 			Expiry:       time.Now().Add(5 * time.Minute),
-		}},
-		StateStore: stateStore,
-		Validator:  validator,
+		}).WithExtra(map[string]any{"id_token": idToken})},
+		StateStore:       stateStore,
+		Validator:        validator,
+		IDTokenValidator: validator,
 	}
 	handler := &webtransport.WebAuthHandler{
 		LoginCommand:    loginCommand,
 		CallbackCommand: callbackCommand,
-		LogoutCommand:   &webcommand.LogoutCommand{},
+		LogoutCommand:   &webcommand.LogoutCommand{IdentityProvider: browserLoginClientStub{}},
 		MeQuery:         &webquery.GetCurrentUserQuery{},
 		CookieManager:   cookieManager,
 		FrontendURL:     "http://localhost:3000",
@@ -234,13 +236,14 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 	callbackReq := httptest.NewRequest(http.MethodGet, "/web/auth/callback?code=ok&state=s1", nil)
 	callbackRes := httptest.NewRecorder()
 	handler.CallbackCommand = &webcommand.CallbackCommand{
-		IdentityProvider: browserCallbackClientStub{token: &oauth2.Token{
+		IdentityProvider: browserCallbackClientStub{token: (&oauth2.Token{
 			AccessToken:  buildToken(t, issuer, "trapigo", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute)),
 			RefreshToken: "refresh-xyz",
 			Expiry:       time.Now().Add(5 * time.Minute),
-		}},
-		StateStore: staticStateStore{state: &domain.OAuthState{State: "s1", CodeVerifier: "ver", Nonce: "n", CreatedAt: time.Now()}},
-		Validator:  validator,
+		}).WithExtra(map[string]any{"id_token": idToken})},
+		StateStore:       staticStateStore{state: &domain.OAuthState{State: "s1", CodeVerifier: "ver", Nonce: "n", CreatedAt: time.Now()}},
+		Validator:        validator,
+		IDTokenValidator: validator,
 	}
 	handler.HandleCallback(callbackRes, callbackReq)
 	if callbackRes.Code != http.StatusFound {
@@ -274,8 +277,20 @@ func TestIntegration_BrowserLoginMeLogoutCycle(t *testing.T) {
 	allowedOrigins := origininfra.ParseAllowedOrigins([]string{"http://localhost:3000"}, "")
 	originMiddleware := originmiddleware.NewOriginValidationMiddleware(allowedOrigins)
 	originMiddleware(http.HandlerFunc(handler.HandleLogout)).ServeHTTP(logoutRes, logoutReq)
-	if logoutRes.Code != http.StatusOK {
+	if logoutRes.Code != http.StatusSeeOther {
 		t.Fatalf("expected %d, got %d", http.StatusOK, logoutRes.Code)
+	}
+	if logoutRes.Header().Get("Location") != "https://keycloak.example.com/logout?id_token_hint="+idToken {
+		t.Fatalf("expected browser logout redirect with ID token hint, got %q", logoutRes.Header().Get("Location"))
+	}
+	if cookies := logoutRes.Result().Cookies(); len(cookies) != 3 {
+		t.Fatalf("expected both auth cookies to be cleared, got %d", len(cookies))
+	} else {
+		for _, cookie := range cookies {
+			if cookie.Value != "" || cookie.MaxAge >= 0 {
+				t.Fatalf("expected cookie deletion, got %s", cookie)
+			}
+		}
 	}
 }
 
@@ -291,8 +306,11 @@ func (browserLoginClientStub) ExchangeAuthorizationCode(context.Context, string,
 	return nil, nil
 }
 
-func (browserLoginClientStub) EndSession(context.Context, string) error {
-	return nil
+func (browserLoginClientStub) BuildLogoutURL(_ context.Context, _, idToken string) (string, error) {
+	if idToken == "" {
+		return "https://keycloak.example.com/logout", nil
+	}
+	return "https://keycloak.example.com/logout?id_token_hint=" + idToken, nil
 }
 
 type browserCallbackClientStub struct {
@@ -307,8 +325,8 @@ func (browserCallbackClientStub) BuildAuthorizationURL(context.Context, infrastr
 	return "", nil
 }
 
-func (browserCallbackClientStub) EndSession(context.Context, string) error {
-	return nil
+func (browserCallbackClientStub) BuildLogoutURL(context.Context, string, string) (string, error) {
+	return "", nil
 }
 
 type staticStateStore struct {
@@ -382,4 +400,23 @@ func buildToken(t *testing.T, issuer, clientID string, key *rsa.PrivateKey, expi
 		t.Fatalf("sign token: %v", err)
 	}
 	return str
+}
+
+func buildIDToken(t *testing.T, issuer, clientID string, key *rsa.PrivateKey, nonce string) string {
+	t.Helper()
+	claims := jwt.MapClaims{
+		"iss":   issuer,
+		"sub":   "user-1",
+		"aud":   clientID,
+		"exp":   time.Now().Add(10 * time.Minute).Unix(),
+		"iat":   time.Now().Add(-time.Minute).Unix(),
+		"nonce": nonce,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = "test-key"
+	signed, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign ID token: %v", err)
+	}
+	return signed
 }

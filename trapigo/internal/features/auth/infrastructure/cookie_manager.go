@@ -9,6 +9,7 @@ import (
 const (
 	AccessTokenCookieName  = "web_access_token"
 	RefreshTokenCookieName = "web_refresh_token"
+	IDTokenCookieName      = "web_id_token"
 )
 
 type CookieManager struct {
@@ -32,12 +33,20 @@ func (m *CookieManager) RefreshTokenCookie(token string, ttl time.Duration) *htt
 	return m.newCookie(RefreshTokenCookieName, token, ttl)
 }
 
+func (m *CookieManager) IDTokenCookie(token string, ttl time.Duration) *http.Cookie {
+	return m.newCookie(IDTokenCookieName, token, ttl)
+}
+
 func (m *CookieManager) ClearAccessTokenCookie() *http.Cookie {
 	return m.newClearCookie(AccessTokenCookieName)
 }
 
 func (m *CookieManager) ClearRefreshTokenCookie() *http.Cookie {
 	return m.newClearCookie(RefreshTokenCookieName)
+}
+
+func (m *CookieManager) ClearIDTokenCookie() *http.Cookie {
+	return m.newClearCookie(IDTokenCookieName)
 }
 
 func (m *CookieManager) ExtractToken(r *http.Request, name string) (string, bool) {
@@ -52,6 +61,10 @@ func (m *CookieManager) ExtractToken(r *http.Request, name string) (string, bool
 		return "", false
 	}
 	return cookie.Value, true
+}
+
+func (m *CookieManager) ExtractIDToken(r *http.Request) (string, bool) {
+	return m.ExtractToken(r, IDTokenCookieName)
 }
 
 func (m *CookieManager) newCookie(name, value string, ttl time.Duration) *http.Cookie {

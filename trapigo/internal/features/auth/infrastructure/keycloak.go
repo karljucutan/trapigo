@@ -10,9 +10,12 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 )
+
+const logoutDiscoveryHTTPTimeout = 10 * time.Second
 
 // PKCE functions from oauth2 package are used directly
 
@@ -109,9 +112,9 @@ func (c *KeycloakClient) Discover(ctx context.Context) (*DiscoveryDocument, erro
 		return nil, fmt.Errorf("configure internal token endpoint: %w", err)
 	}
 	if doc.EndSessionEndpoint != "" {
-		doc.EndSessionEndpoint, err = rebaseEndpointURL(doc.EndSessionEndpoint, c.cfg.InternalRealmURL)
+		doc.EndSessionEndpoint, err = rebaseEndpointURL(doc.EndSessionEndpoint, c.cfg.IssuerURL)
 		if err != nil {
-			return nil, fmt.Errorf("configure internal end-session endpoint: %w", err)
+			return nil, fmt.Errorf("configure public end-session endpoint: %w", err)
 		}
 	}
 	if doc.JWKSURI != "" {
@@ -230,53 +233,40 @@ func (c *KeycloakClient) RefreshToken(ctx context.Context, refreshToken string) 
 	return token, nil
 }
 
-// EndSession ends the Keycloak SSO session bound to the refresh token.
-func (c *KeycloakClient) EndSession(ctx context.Context, refreshToken string) error {
-	if strings.TrimSpace(refreshToken) == "" {
-		return errors.New("refresh token is required")
+// BuildLogoutURL prepares browser RP-Initiated Logout without ending the session itself.
+func (c *KeycloakClient) BuildLogoutURL(ctx context.Context, postLogoutRedirectURI, idTokenHint string) (string, error) {
+	returnURL, err := url.Parse(postLogoutRedirectURI)
+	if err != nil || returnURL == nil || (returnURL.Scheme != "http" && returnURL.Scheme != "https") ||
+		returnURL.Host == "" || returnURL.User != nil || returnURL.Fragment != "" {
+		return "", errors.New("post-logout redirect URI must be an absolute HTTP(S) URL without credentials or fragment")
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, logoutDiscoveryHTTPTimeout)
+	defer cancel()
 
 	doc, err := c.Discover(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if strings.TrimSpace(doc.EndSessionEndpoint) == "" {
-		return errors.New("discovery response missing end_session_endpoint")
+		return "", errors.New("discovery response missing end_session_endpoint")
 	}
-
-	form := url.Values{}
-	form.Set("client_id", c.cfg.ClientID)
-	if strings.TrimSpace(c.cfg.ClientSecret) != "" {
-		form.Set("client_secret", c.cfg.ClientSecret)
-	}
-	form.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, doc.EndSessionEndpoint, strings.NewReader(form.Encode()))
+	endpoint, err := url.Parse(doc.EndSessionEndpoint)
 	if err != nil {
-		return fmt.Errorf("build logout request: %w", err)
+		return "", fmt.Errorf("parse end-session endpoint: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("call end session endpoint: %w", err)
+	if (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" ||
+		endpoint.User != nil || endpoint.Fragment != "" {
+		return "", errors.New("end-session endpoint must be an absolute HTTP(S) URL without credentials or fragment")
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return nil
+	params := endpoint.Query()
+	params.Set("client_id", c.cfg.ClientID)
+	params.Set("post_logout_redirect_uri", returnURL.String())
+	if strings.TrimSpace(idTokenHint) != "" {
+		params.Set("id_token_hint", idTokenHint)
 	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-	// An expired or already-revoked refresh token means there is no session left to end.
-	if resp.StatusCode == http.StatusBadRequest {
-		var oauthErr struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &oauthErr) == nil && oauthErr.Error == "invalid_grant" {
-			return nil
-		}
-	}
-	return fmt.Errorf("end session endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	endpoint.RawQuery = params.Encode()
+	return endpoint.String(), nil
 }
 
 func (c *KeycloakClient) oauthConfig(ctx context.Context) (*oauth2.Config, error) {

@@ -4,6 +4,7 @@ import {
   fetchGatewaySession,
   getAuthConfig,
   loginURL,
+  logoutActionURL,
 } from "./auth-gateway.server.ts";
 
 const config = {
@@ -42,6 +43,10 @@ test("production configuration requires explicit HTTPS origins", (t) => {
   });
   process.env.AUTH_PUBLIC_ORIGIN = "https://app.example.com/login";
   assert.throws(getAuthConfig, /without a path/);
+});
+
+test("logout action submits directly to the gateway public origin", () => {
+  assert.equal(logoutActionURL(config), "http://localhost/web/auth/logout");
 });
 
 test("login URL retains the dashboard URL, query and fragment", () => {

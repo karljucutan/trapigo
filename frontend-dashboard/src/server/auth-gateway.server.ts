@@ -9,7 +9,7 @@ export type AuthConfig = {
   loginOrigin: string;
 };
 
-const GATEWAY_REQUEST_TIMEOUT_MS = 5_000;
+const GATEWAY_REQUEST_TIMEOUT_MS = 15_000;
 
 function configuredOrigin(value: string, name: string): string {
   const url = new URL(value);
@@ -75,6 +75,10 @@ export function loginURL(returnTo: string, config: AuthConfig): string {
   return login.href;
 }
 
+export function logoutActionURL(config: AuthConfig): string {
+  return new URL("/web/auth/logout", config.loginOrigin).href;
+}
+
 export async function fetchGatewaySession(
   cookieHeader: string,
   config: AuthConfig,
@@ -122,35 +126,4 @@ export async function fetchGatewaySession(
     user: { subject: body.subject, username: body.username },
     cookies: rotatedCookies,
   };
-}
-
-export async function callGatewayLogout(
-  cookieHeader: string,
-  config: AuthConfig,
-  request: typeof fetch = fetch,
-): Promise<{ cookies: string[] }> {
-  const cookies = cookieHeader
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie))
-    .join("; ");
-  const response = await request(
-    new URL("/web/auth/logout", config.gatewayOrigin),
-    {
-      method: "POST",
-      headers: cookies ? { Cookie: cookies } : {},
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(GATEWAY_REQUEST_TIMEOUT_MS),
-    },
-  );
-  const rotatedCookies = response.headers
-    .getSetCookie()
-    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie));
-
-  if (!response.ok) {
-    throw new Error(`Logout failed with status ${response.status}`);
-  }
-
-  return { cookies: rotatedCookies };
 }

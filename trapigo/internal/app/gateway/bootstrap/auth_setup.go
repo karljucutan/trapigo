@@ -55,8 +55,9 @@ func buildAuthComponents(cfg *config.Config) (*authComponents, error) {
 		IdentityProvider: keycloakClient,
 		StateStore:       stateStore,
 		Validator:        jwtValidator,
+		IDTokenValidator: jwtValidator,
 	}
-	logoutCommand := &webcommand.LogoutCommand{CookieManager: cookieManager, IdentityProvider: keycloakClient}
+	logoutCommand := &webcommand.LogoutCommand{IdentityProvider: keycloakClient}
 	meQuery := &webquery.GetCurrentUserQuery{}
 	handler := &webtransport.WebAuthHandler{
 		LoginCommand:    loginCommand,

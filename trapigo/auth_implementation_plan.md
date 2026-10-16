@@ -205,12 +205,14 @@ go get github.com/golang-jwt/jwt/v5
   - [x] Constants for cookie names:
      - `web_access_token`
      - `web_refresh_token`
+      - `web_id_token` (encrypted, HttpOnly RP-Initiated Logout hint)
   - [x] Function to create access token cookie:
      - HttpOnly, Secure (production), SameSite=Lax, Path=/
      - Configurable max-age based on token expiration
   - [x] Function to create refresh token cookie:
      - Same attributes as access token
      - Longer max-age
+  - [x] Validate ID token signature, issuer, audience, expiration, nonce, and authorized party before encrypting it into its cookie
   - [x] Function to create "clear" cookies (max-age=0, same attributes)
   - [x] Helper to extract token from cookie by name
 
@@ -257,8 +259,8 @@ go get github.com/golang-jwt/jwt/v5
   - [x] Return tokens for cookie setting
 
 3. **Create logout command** (`application/command/logout.go`)
-  - [x] Optionally revoke refresh token with Keycloak
-  - [x] Return cookie clear instructions
+  - [x] Build a public Keycloak RP-Initiated Logout URL with `client_id`, the validated `id_token_hint`, and the configured frontend return URL; do not use the legacy refresh-token logout POST
+  - [x] Clear local auth cookies in the HTTP handler, including when logout URL preparation fails
 
 4. **Create get current user query** (`application/query/get_current_user.go`)
   - [x] Accept validated JWT or extract from context
@@ -278,8 +280,8 @@ go get github.com/golang-jwt/jwt/v5
   - [x] `HandleLogout(w http.ResponseWriter, r *http.Request)`
      - POST `/web/auth/logout`
      - Call logout command
-     - Clear cookies
-     - Redirect or return 200
+      - Require an allowed `Origin`, clear cookies, and return a `303` directly to Keycloak
+     - Return an explicit error if logout URL preparation fails; cookie deletion still applies
   - [x] `HandleMe(w http.ResponseWriter, r *http.Request)`
      - GET `/web/auth/me`
      - Extract auth from context (set by middleware)
@@ -441,6 +443,8 @@ go get github.com/golang-jwt/jwt/v5
   - [x] Client secret is never exposed to browser/native app
   - [x] Access token cookie is HttpOnly
   - [x] Refresh token cookie is HttpOnly
+  - [x] ID token is signature-validated and stored only as an encrypted HttpOnly cookie
+  - [x] Logout uses the ID token as `id_token_hint` without exposing it through a dashboard server function
   - [x] Cookies use Secure in production
   - [x] SameSite policy is intentional (Lax default)
   - [x] JWT signature is validated
@@ -562,4 +566,3 @@ If a later project decides to move browser authentication to a dedicated BFF ser
 5. Trapigo's authentication middleware would simplify to Bearer-only validation (remove `CookieManager` and `RefreshTokenFunc`).
 
 See `auth_plan.md` section 28 for detailed migration preconditions and steps.
-

@@ -32,8 +32,8 @@ func (*loginClientStub) ExchangeAuthorizationCode(context.Context, string, strin
 	return nil, nil
 }
 
-func (*loginClientStub) EndSession(context.Context, string) error {
-	return nil
+func (*loginClientStub) BuildLogoutURL(context.Context, string, string) (string, error) {
+	return "", nil
 }
 
 func TestLoginCommand_PreservesReturnURLInOAuthState(t *testing.T) {

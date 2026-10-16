@@ -48,6 +48,42 @@ func TestJWTValidator_UsesInternalRealmURLAndPublicIssuer(t *testing.T) {
 	}
 }
 
+func TestJWTValidator_ValidatesIDTokenClaims(t *testing.T) {
+	privateKey, kid, serverURL, client := newJWKSValidatorTestServer(t, nil)
+	validator := NewJWTValidatorWithJWKSCacheTTL(serverURL, serverURL, "trapigo", time.Hour, client)
+
+	validToken := buildValidatorTokenWithExtras(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
+		"nonce": "expected-nonce",
+	})
+	if err := validator.ValidateIDToken(context.Background(), validToken, "expected-nonce"); err != nil {
+		t.Fatalf("expected valid ID token, got %v", err)
+	}
+
+	invalidTokens := map[string]string{
+		"nonce mismatch": buildValidatorTokenWithExtras(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
+			"nonce": "wrong-nonce",
+		}),
+		"wrong audience": buildValidatorTokenWithExtras(t, serverURL, "other-client", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
+			"nonce": "expected-nonce",
+		}),
+		"wrong authorized party": buildValidatorTokenWithExtras(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
+			"nonce": "expected-nonce",
+			"azp":   "other-client",
+		}),
+		"multiple audiences without authorized party": buildValidatorTokenWithExtras(t, serverURL, "trapigo", kid, privateKey, time.Now().Add(5*time.Minute), nil, map[string]any{
+			"nonce": "expected-nonce",
+			"aud":   []string{"trapigo", "other-client"},
+		}),
+	}
+	for name, token := range invalidTokens {
+		t.Run(name, func(t *testing.T) {
+			if err := validator.ValidateIDToken(context.Background(), token, "expected-nonce"); err == nil {
+				t.Fatal("expected invalid ID token to be rejected")
+			}
+		})
+	}
+}
+
 func TestJWTValidator_RefreshesJWKSOnUnknownKeyID(t *testing.T) {
 	oldKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

@@ -1,11 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { Waypoints } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { handleLogout } from "@/server/auth.functions";
 
 interface AppNavProps {
+  logoutAction: string;
   user?: {
     email?: string;
     name?: string;
@@ -14,19 +13,8 @@ interface AppNavProps {
   };
 }
 
-export function AppNav({ user }: AppNavProps) {
+export function AppNav({ user, logoutAction }: AppNavProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const logout = useServerFn(handleLogout);
-
-  const onLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-    } catch (error) {
-      setIsLoggingOut(false);
-      console.error("Logout failed:", error);
-    }
-  };
 
   const displayName = user?.username || user?.email || "User";
 
@@ -52,14 +40,20 @@ export function AppNav({ user }: AppNavProps) {
               {displayName}
             </span>
           )}
-          <Button
-            onClick={onLogout}
-            disabled={isLoggingOut}
-            variant="outline"
-            size="sm"
+          <form
+            action={logoutAction}
+            method="post"
+            onSubmit={() => setIsLoggingOut(true)}
           >
-            {isLoggingOut ? "Logging out..." : "Logout"}
-          </Button>
+            <Button
+              type="submit"
+              disabled={isLoggingOut}
+              variant="outline"
+              size="sm"
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
+            </Button>
+          </form>
         </div>
       </div>
     </nav>

@@ -3,6 +3,7 @@ package transporthttp
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
@@ -57,6 +58,7 @@ func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Reques
 	if target == "" {
 		target = "/"
 	}
+	idTokenCookie := h.CookieManager.IDTokenCookie(result.IDToken, 30*24*time.Hour)
 
 	ttl := time.Until(result.Token.Expiry)
 	if ttl <= 0 {
@@ -66,21 +68,32 @@ func (h *WebAuthHandler) HandleCallback(rw http.ResponseWriter, req *http.Reques
 	if result.Token.RefreshToken != "" {
 		http.SetCookie(rw, h.CookieManager.RefreshTokenCookie(result.Token.RefreshToken, 30*24*time.Hour))
 	}
+	http.SetCookie(rw, idTokenCookie)
 
 	http.Redirect(rw, req, target, http.StatusFound)
 }
 
 func (h *WebAuthHandler) HandleLogout(rw http.ResponseWriter, req *http.Request) {
-	refreshToken, _ := h.CookieManager.ExtractToken(req, infrastructure.RefreshTokenCookieName)
-	if err := h.LogoutCommand.Execute(req.Context(), refreshToken); err != nil {
-		http.Error(rw, "logout failed", http.StatusUnauthorized)
+	rw.Header().Set("Cache-Control", "no-store")
+	if strings.TrimSpace(req.Header.Get("Origin")) == "" {
+		http.Error(rw, "Origin header required", http.StatusForbidden)
+		return
+	}
+	var idTokenHint string
+	if h.CookieManager != nil {
+		idTokenHint, _ = h.CookieManager.ExtractIDToken(req)
+		http.SetCookie(rw, h.CookieManager.ClearAccessTokenCookie())
+		http.SetCookie(rw, h.CookieManager.ClearRefreshTokenCookie())
+		http.SetCookie(rw, h.CookieManager.ClearIDTokenCookie())
+	}
+
+	logoutURL, err := h.LogoutCommand.Execute(req.Context(), h.FrontendURL, idTokenHint)
+	if err != nil {
+		http.Error(rw, "could not prepare Keycloak logout; local cookies cleared", http.StatusBadGateway)
 		return
 	}
 
-	http.SetCookie(rw, h.CookieManager.ClearAccessTokenCookie())
-	http.SetCookie(rw, h.CookieManager.ClearRefreshTokenCookie())
-	rw.WriteHeader(http.StatusOK)
-	_, _ = rw.Write([]byte(`{"status":"logged_out"}`))
+	http.Redirect(rw, req, logoutURL, http.StatusSeeOther)
 }
 
 func (h *WebAuthHandler) HandleMe(rw http.ResponseWriter, req *http.Request) {

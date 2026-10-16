@@ -30,7 +30,8 @@ func TestCallbackCommand_RejectsNonceMismatch(t *testing.T) {
 			CodeVerifier: "ver",
 			CreatedAt:    time.Now(),
 		}},
-		Validator: callbackValidatorStub{claims: &domain.Claims{Subject: "user-1"}},
+		Validator:        callbackValidatorStub{claims: &domain.Claims{Subject: "user-1"}},
+		IDTokenValidator: callbackIDTokenValidatorStub{err: domain.ErrInvalidJWT},
 	}
 
 	_, err = cmd.Execute(context.Background(), "code", "s1")
@@ -42,12 +43,13 @@ func TestCallbackCommand_RejectsNonceMismatch(t *testing.T) {
 func TestCallbackCommand_ReturnsStoredReturnURL(t *testing.T) {
 	const returnURL = "http://localhost:3000/dashboard"
 	cmd := &CallbackCommand{
-		IdentityProvider: callbackClientStub{token: &oauth2.Token{AccessToken: "access-token"}},
+		IdentityProvider: callbackClientStub{token: (&oauth2.Token{AccessToken: "access-token"}).WithExtra(map[string]any{"id_token": "validated-id-token"})},
 		StateStore: callbackStateStoreStub{state: &domain.OAuthState{
 			State: "s1", Nonce: "nonce", CodeVerifier: "verifier",
 			CreatedAt: time.Now(), ReturnURL: returnURL,
 		}},
-		Validator: callbackValidatorStub{claims: &domain.Claims{Subject: "user-1"}},
+		Validator:        callbackValidatorStub{claims: &domain.Claims{Subject: "user-1"}},
+		IDTokenValidator: callbackIDTokenValidatorStub{},
 	}
 	result, err := cmd.Execute(context.Background(), "code", "s1")
 	if err != nil {
@@ -70,8 +72,8 @@ func (callbackClientStub) BuildAuthorizationURL(context.Context, infrastructure.
 	return "", nil
 }
 
-func (callbackClientStub) EndSession(context.Context, string) error {
-	return nil
+func (callbackClientStub) BuildLogoutURL(context.Context, string, string) (string, error) {
+	return "", nil
 }
 
 type callbackStateStoreStub struct {
@@ -88,6 +90,14 @@ func (s callbackStateStoreStub) Delete(ctx context.Context, stateValue string) e
 
 type callbackValidatorStub struct {
 	claims *domain.Claims
+}
+
+type callbackIDTokenValidatorStub struct {
+	err error
+}
+
+func (s callbackIDTokenValidatorStub) ValidateIDToken(context.Context, string, string) error {
+	return s.err
 }
 
 func (s callbackValidatorStub) Validate(ctx context.Context, token string) (*domain.Claims, error) {

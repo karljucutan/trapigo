@@ -10,5 +10,5 @@ import (
 type IdentityProvider interface {
 	BuildAuthorizationURL(ctx context.Context, params infrastructure.AuthorizationURLParams) (string, error)
 	ExchangeAuthorizationCode(ctx context.Context, code, codeVerifier string) (*oauth2.Token, error)
-	EndSession(ctx context.Context, refreshToken string) error
+	BuildLogoutURL(ctx context.Context, postLogoutRedirectURI, idTokenHint string) (string, error)
 }
