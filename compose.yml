@@ -1,23 +1,60 @@
 name: trapigo-monorepo
 
 services:
-  # Example: rename to actual proj name db.
-  trapigo-services-db:
-    image: postgres:18-alpine
+  ### Observability
+  jaeger:
+    image: docker.io/jaegertracing/jaeger:2.20.0
+    command: ["--config=/etc/jaeger/config.yaml"]
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    ports:
-    - "5432:5432"
+      JAEGER_MEMORY_MAX_TRACES: "${JAEGER_MEMORY_MAX_TRACES:-10000}"
     volumes:
-      - pgdata-trapigo-services:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
-      interval: 4s
-      timeout: 4s
-      retries: 5
+      - ./observability/jaeger-config.yaml:/etc/jaeger/config.yaml:ro,Z
+    ports:
+      - "127.0.0.1:16686:16686"
 
+  otel-collector:
+    image: docker.io/otel/opentelemetry-collector-contrib:0.163.1
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    stop_grace_period: 30s
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro,Z
+    depends_on:
+      - jaeger
+
+  prometheus:
+    image: docker.io/prom/prometheus:v3.15.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-7d}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-2GB}"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro,Z
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - otel-collector
+
+  grafana:
+    image: docker.io/grafana/grafana:13.2.4
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro,Z
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+      - jaeger
+  ### Observability
+
+  ### IAM
   keycloak-db:
     image: postgres:18-alpine
     environment:
@@ -53,6 +90,23 @@ services:
     depends_on:
       keycloak-db:
         condition: service_healthy
+  ### IAM
+
+  trapigo-services-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+    - "5432:5432"
+    volumes:
+      - pgdata-trapigo-services:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 4s
+      timeout: 4s
+      retries: 5
 
   trapigo:
     build:
@@ -107,3 +161,5 @@ services:
 volumes:
   pgdata-trapigo-services:
   pgdata-keycloak:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Trapigo
+    orgId: 1
+    folder: Trapigo
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /etc/grafana/provisioning/dashboards

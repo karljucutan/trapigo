@@ -1,6 +1,9 @@
 # Dashboard Request Flow Showcase Plan
 
-Status: Phase 2 UI data contract implemented; observability implementation not started.
+Status: Phases 2 and 3 infrastructure configured; Go and service instrumentation not started.
+
+For a Phase 3 architecture and YAML walkthrough, see
+[phase3_explanation.md](./phase3_explanation.md).
 
 ## Goal
 
