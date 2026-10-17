@@ -123,10 +123,10 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
   const flow = presentRequestFlow(state);
   return (
     <section aria-labelledby="flow-heading">
-      <Card className="border-slate-200/80 bg-white shadow-sm">
-        <CardHeader className="flex-row items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+      <Card className="border-border/80 bg-card shadow-sm">
+        <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Workflow aria-hidden="true" className="size-4.5" />
             </div>
             <div>
@@ -138,7 +138,7 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
               </CardDescription>
             </div>
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 sm:inline-flex">
+          <span className="hidden items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground sm:inline-flex">
             <Layers3 aria-hidden="true" className="size-3.5" />3 configured
             replicas
           </span>
@@ -146,7 +146,7 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
         <CardContent className="p-0">
           <fieldset className="m-0 min-w-0 border-0 p-0">
             <legend className="sr-only">Gateway request flow diagram</legend>
-            <div className="h-[1010px] w-full overflow-hidden rounded-b-xl bg-[radial-gradient(#dce2ec_0.8px,transparent_0.8px)] [background-size:18px_18px]">
+            <div className="h-[1010px] w-full overflow-hidden rounded-b-xl bg-[radial-gradient(var(--border)_0.8px,transparent_0.8px)] [background-size:18px_18px]">
               <ReactFlowProvider>
                 <GatewayFlow
                   policies={flow.policies}
@@ -155,13 +155,13 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
               </ReactFlowProvider>
             </div>
           </fieldset>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-2">
-              <span className="size-2 rounded-full bg-indigo-500" />
+              <span className="size-2 rounded-full bg-primary" />
               Gateway
             </span>
             <span className="inline-flex items-center gap-2">
-              <span className="size-2 rounded-sm border border-slate-300 bg-white" />
+              <span className="size-2 rounded-sm border border-border bg-background" />
               Configured service slot
             </span>
             <span className="ml-auto">Select and drag to pan</span>
@@ -234,8 +234,8 @@ function GatewayFlow({
     source: node.id,
     target: nodes[index + 1]?.id ?? "",
     type: "smoothstep",
-    markerEnd: { type: MarkerType.ArrowClosed, color: "#cbd5e1" },
-    style: { stroke: "#cbd5e1", strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
+    style: { stroke: "var(--border)", strokeWidth: 1.5 },
   }));
 
   useEffect(() => {
@@ -264,11 +264,11 @@ function GatewayFlow({
         proOptions={{ hideAttribution: true }}
         className="!bg-transparent"
       >
-        <Background color="#cbd5e1" gap={18} size={1} />
+        <Background color="var(--border)" gap={18} size={1} />
         <Controls
           position="bottom-right"
           showInteractive={false}
-          className="!overflow-hidden !rounded-lg !border !border-slate-200 !bg-white !shadow-sm [&>button]:!border-slate-100 [&>button]:!bg-white [&>button]:!text-slate-600 [&>button:hover]:!bg-slate-50"
+          className="!overflow-hidden !rounded-lg !border !border-border !bg-background !shadow-sm [&>button]:!border-border [&>button]:!bg-background [&>button]:!text-muted-foreground [&>button:hover]:!bg-muted"
         />
       </ReactFlow>
     </div>
@@ -284,23 +284,21 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
     <article
       aria-labelledby={`stage-title-${data.number}`}
       className={`relative flex min-h-[76px] items-center gap-3 rounded-xl border px-3.5 py-3 shadow-sm ${
-        isEntry
-          ? "border-indigo-200 bg-indigo-50/95"
-          : "border-slate-200 bg-white/95"
+        isEntry ? "border-primary/30 bg-primary/10" : "border-border bg-card"
       }`}
     >
       {!isEntry && (
         <Handle
           type="target"
           position={Position.Top}
-          className="!size-2 !border-0 !bg-slate-300"
+          className="!size-2 !border-0 !bg-muted-foreground"
         />
       )}
       <div
         className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
           isEntry || isRouting
-            ? "bg-indigo-100 text-indigo-700"
-            : "bg-slate-100 text-slate-600"
+            ? "bg-primary/15 text-primary"
+            : "bg-muted text-muted-foreground"
         }`}
       >
         <Icon aria-hidden="true" className="size-4" />
@@ -309,36 +307,36 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
         <div className="flex items-center gap-2">
           <span
             className={`text-[10px] font-semibold tracking-[0.12em] ${
-              isEntry ? "text-indigo-700" : "text-slate-400"
+              isEntry ? "text-primary" : "text-muted-foreground"
             }`}
           >
             {data.number}
           </span>
           <h3
             id={`stage-title-${data.number}`}
-            className="truncate text-[13px] font-semibold text-slate-900"
+            className="truncate text-[13px] font-semibold text-foreground"
           >
             {data.title}
           </h3>
         </div>
-        <p className="mt-1 truncate text-xs text-slate-500">
+        <p className="mt-1 truncate text-xs text-muted-foreground">
           {data.description}
         </p>
       </div>
       {isRouting && (
-        <span className="shrink-0 rounded-md bg-indigo-50 px-2 py-1 text-[10px] font-medium text-indigo-700">
+        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
           configured
         </span>
       )}
       {data.observation && (
-        <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+        <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {data.observation}
         </span>
       )}
       <Handle
         type="source"
         position={Position.Bottom}
-        className={`!size-2 !border-0 ${isEntry ? "!bg-indigo-400" : "!bg-slate-300"}`}
+        className={`!size-2 !border-0 ${isEntry ? "!bg-primary" : "!bg-muted-foreground"}`}
       />
     </article>
   );
@@ -346,27 +344,27 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
 
 function ReplicaPoolNodeCard({ data }: NodeProps<ReplicaPoolFlowNode>) {
   return (
-    <div className="relative rounded-xl border border-slate-200 bg-white/95 p-3.5 shadow-sm">
+    <div className="relative rounded-xl border border-border bg-card p-3.5 shadow-sm">
       <Handle
         type="target"
         position={Position.Top}
-        className="!size-2 !border-0 !bg-slate-300"
+        className="!size-2 !border-0 !bg-muted-foreground"
       />
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
             <Server aria-hidden="true" className="size-4" />
           </div>
           <div>
-            <h3 className="text-xs font-semibold text-slate-900">
+            <h3 className="text-xs font-semibold text-foreground">
               Order service pool
             </h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
               Configured topology · health not observed
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
+        <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
           3 slots
         </span>
       </div>
@@ -374,18 +372,18 @@ function ReplicaPoolNodeCard({ data }: NodeProps<ReplicaPoolFlowNode>) {
         {data.replicas.map((replica) => (
           <div
             key={replica}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-2.5 text-center"
+            className="rounded-lg border border-border bg-muted/50 px-2 py-2.5 text-center"
           >
-            <span className="block text-[11px] font-medium text-slate-700">
+            <span className="block text-[11px] font-medium text-foreground">
               {replica}
             </span>
-            <span className="mt-1 block text-[10px] text-slate-400">
+            <span className="mt-1 block text-[10px] text-muted-foreground">
               configured
             </span>
           </div>
         ))}
       </div>
-      <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+      <p className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground">
         Observed selection: {data.observedSelection}
       </p>
     </div>
