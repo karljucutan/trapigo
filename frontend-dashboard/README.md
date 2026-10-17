@@ -81,6 +81,10 @@ npm run typecheck
 npm run build
 ```
 
+Production builds use Nitro's default Node.js preset and can be started with
+`npm run start`. Set `NITRO_PRESET` to a supported Nitro preset to target a
+different deployment platform.
+
 ## Adding components
 
 To add components to your app, run the following command:
