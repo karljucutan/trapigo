@@ -1,7 +1,9 @@
 import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { RequestFlowState } from "@/lib/request-flow";
+import { presentRequestFlow } from "@/lib/request-flow-presentation";
 
-export function DashboardHeader() {
+export function DashboardHeader({ state }: { state: RequestFlowState }) {
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -18,7 +20,7 @@ export function DashboardHeader() {
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ConnectionBadge />
+        <ConnectionBadge state={state} />
         <Button
           type="button"
           size="lg"
@@ -37,11 +39,12 @@ export function DashboardHeader() {
   );
 }
 
-function ConnectionBadge() {
+function ConnectionBadge({ state }: { state: RequestFlowState }) {
+  const connection = presentRequestFlow(state).connection;
   return (
     <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-800">
       <span className="size-1.5 rounded-full bg-amber-500" />
-      Not connected
+      {connection}
     </span>
   );
 }

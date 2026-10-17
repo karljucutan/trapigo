@@ -72,6 +72,14 @@ must revalidate, and login/logout should invalidate the router. The existing
 gateway uses an in-memory OAuth state store; multi-instance deployments need a
 shared, expiring, single-use state store.
 
+## Dashboard request-flow contract
+
+`src/lib/request-flow.ts` defines bounded request, policy, and trace evidence
+types. Span timings include their measurement boundary; selected replicas and
+successful delivery are separate evidence. Missing evidence is rendered as
+unknown rather than success. The dashboard is currently `not-connected`; fixtures
+in `src/lib/request-flow.test.ts` are test-only and do not simulate traffic.
+
 Validation (Node 24+):
 
 ```bash
@@ -100,5 +108,5 @@ This will place the ui components in the `components` directory.
 To use the components in your app, import them as follows:
 
 ```tsx
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"
 ```

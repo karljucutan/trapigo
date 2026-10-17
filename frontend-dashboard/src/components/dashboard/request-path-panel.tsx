@@ -34,6 +34,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { PolicyName, RequestFlowState } from "@/lib/request-flow";
+import { presentRequestFlow } from "@/lib/request-flow-presentation";
 
 type StageData = {
   number: string;
@@ -41,10 +43,13 @@ type StageData = {
   description: string;
   icon: LucideIcon;
   variant?: "entry" | "policy" | "routing";
+  policy?: PolicyName;
+  observation?: string;
 };
 
 type ReplicaPoolData = {
   replicas: string[];
+  observedSelection: string;
 };
 
 type StageFlowNode = Node<StageData, "stage">;
@@ -70,24 +75,28 @@ const stages: StageData[] = [
     title: "Rate limiting",
     description: "IP-based token bucket",
     icon: Clock3,
+    policy: "rate-limit",
   },
   {
     number: "03",
     title: "CSRF & origin checks",
     description: "Origin validation and CSRF protection",
     icon: ShieldCheck,
+    policy: "csrf-origin",
   },
   {
     number: "04",
     title: "Authentication",
     description: "Validate caller credentials",
     icon: LockKeyhole,
+    policy: "authentication",
   },
   {
     number: "05",
     title: "Route matching",
     description: "Match gateway route configuration",
     icon: RouteIcon,
+    policy: "route-matching",
   },
   {
     number: "06",
@@ -95,6 +104,7 @@ const stages: StageData[] = [
     description: "Round-robin upstream selection",
     icon: GitBranch,
     variant: "routing",
+    policy: "replica-selection",
   },
   {
     number: "07",
@@ -109,7 +119,8 @@ const nodeTypes = {
   replicaPool: ReplicaPoolNodeCard,
 };
 
-export function RequestPathPanel() {
+export function RequestPathPanel({ state }: { state: RequestFlowState }) {
+  const flow = presentRequestFlow(state);
   return (
     <section aria-labelledby="flow-heading">
       <Card className="border-slate-200/80 bg-white shadow-sm">
@@ -133,14 +144,17 @@ export function RequestPathPanel() {
           </span>
         </CardHeader>
         <CardContent className="p-0">
-          <div
-            aria-label="Gateway request flow diagram"
-            className="h-[1010px] w-full overflow-hidden rounded-b-xl bg-[radial-gradient(#dce2ec_0.8px,transparent_0.8px)] [background-size:18px_18px]"
-          >
-            <ReactFlowProvider>
-              <GatewayFlow />
-            </ReactFlowProvider>
-          </div>
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="sr-only">Gateway request flow diagram</legend>
+            <div className="h-[1010px] w-full overflow-hidden rounded-b-xl bg-[radial-gradient(#dce2ec_0.8px,transparent_0.8px)] [background-size:18px_18px]">
+              <ReactFlowProvider>
+                <GatewayFlow
+                  policies={flow.policies}
+                  selectedReplica={flow.selectedReplica}
+                />
+              </ReactFlowProvider>
+            </div>
+          </fieldset>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
             <span className="inline-flex items-center gap-2">
               <span className="size-2 rounded-full bg-indigo-500" />
@@ -158,7 +172,13 @@ export function RequestPathPanel() {
   );
 }
 
-function GatewayFlow() {
+function GatewayFlow({
+  policies,
+  selectedReplica,
+}: {
+  policies: ReturnType<typeof presentRequestFlow>["policies"];
+  selectedReplica: string;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const { fitView } = useReactFlow<DashboardFlowNode>();
@@ -184,7 +204,12 @@ function GatewayFlow() {
     id: `stage-${stage.number}`,
     type: "stage",
     position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 96 },
-    data: stage,
+    data: {
+      ...stage,
+      observation: stage.policy
+        ? policies.find((policy) => policy.policy === stage.policy)?.outcome
+        : undefined,
+    },
     style: { width: cardWidth },
     draggable: false,
     selectable: false,
@@ -196,6 +221,7 @@ function GatewayFlow() {
     position: { x, y: 900 },
     data: {
       replicas: ["Replica 01", "Replica 02", "Replica 03"],
+      observedSelection: selectedReplica,
     },
     style: { width: cardWidth },
     draggable: false,
@@ -255,9 +281,8 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
   const isRouting = data.variant === "routing";
 
   return (
-    <div
-      role="group"
-      aria-label={`${data.number === "IN" ? "Gateway entry" : `Step ${data.number}`}: ${data.title}`}
+    <article
+      aria-labelledby={`stage-title-${data.number}`}
       className={`relative flex min-h-[76px] items-center gap-3 rounded-xl border px-3.5 py-3 shadow-sm ${
         isEntry
           ? "border-indigo-200 bg-indigo-50/95"
@@ -289,7 +314,10 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
           >
             {data.number}
           </span>
-          <h3 className="truncate text-[13px] font-semibold text-slate-900">
+          <h3
+            id={`stage-title-${data.number}`}
+            className="truncate text-[13px] font-semibold text-slate-900"
+          >
             {data.title}
           </h3>
         </div>
@@ -302,12 +330,17 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
           configured
         </span>
       )}
+      {data.observation && (
+        <span className="ml-auto shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+          {data.observation}
+        </span>
+      )}
       <Handle
         type="source"
         position={Position.Bottom}
         className={`!size-2 !border-0 ${isEntry ? "!bg-indigo-400" : "!bg-slate-300"}`}
       />
-    </div>
+    </article>
   );
 }
 
@@ -352,6 +385,9 @@ function ReplicaPoolNodeCard({ data }: NodeProps<ReplicaPoolFlowNode>) {
           </div>
         ))}
       </div>
+      <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+        Observed selection: {data.observedSelection}
+      </p>
     </div>
   );
 }
