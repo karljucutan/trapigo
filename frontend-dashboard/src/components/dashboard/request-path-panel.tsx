@@ -197,13 +197,13 @@ function GatewayFlow({
   }, []);
 
   const isNarrow = canvasWidth < 480;
-  const cardWidth = isNarrow ? Math.max(280, canvasWidth - 36) : 360;
+  const cardWidth = isNarrow ? Math.max(280, canvasWidth - 36) : 460;
   const x = Math.max(12, (canvasWidth - cardWidth) / 2);
 
   const stageNodes: StageFlowNode[] = stages.map((stage, index) => ({
     id: `stage-${stage.number}`,
     type: "stage",
-    position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 96 },
+    position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 108 },
     data: {
       ...stage,
       observation: stage.policy
@@ -314,12 +314,12 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
           </span>
           <h3
             id={`stage-title-${data.number}`}
-            className="truncate text-[13px] font-semibold text-foreground"
+            className="break-words text-[13px] font-semibold text-foreground"
           >
             {data.title}
           </h3>
         </div>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
+        <p className="mt-1 whitespace-normal break-words text-xs text-muted-foreground">
           {data.description}
         </p>
       </div>
