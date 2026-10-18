@@ -3,20 +3,24 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/karljucutan/trapigo/trapigo/internal/platform/telemetry"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
 )
 
 type App struct {
-	GatewayServer *http.Server
-	AdminServer   *http.Server
+	GatewayServer     *http.Server
+	AdminServer       *http.Server
+	shutdownTelemetry func(ctx context.Context) error
 }
 
 func CreateApp() (*App, error) {
@@ -31,6 +35,11 @@ func CreateApp() (*App, error) {
 	}
 
 	auth, err := buildAuthComponents(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	shutdownTelemetry, err := initializeTelemetry()
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +66,28 @@ func CreateApp() (*App, error) {
 			ReadTimeout:       5 * time.Second,
 			WriteTimeout:      5 * time.Second,
 		},
+		shutdownTelemetry: shutdownTelemetry,
 	}, nil
+}
+
+func initializeTelemetry() (func(context.Context) error, error) {
+	initTelemetryCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	samplingRatio, err := strconv.ParseFloat(configuration.GetEnv("TELEMETRY_SAMPLING_RATIO", "1.0"), 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse TELEMETRY_SAMPLING_RATIO: %w", err)
+	}
+
+	shutdown, err := telemetry.Init(initTelemetryCtx, telemetry.Config{
+		ServiceName:   configuration.GetEnv("APP_NAME", "trapigo-gateway"),
+		Environment:   configuration.GetEnv("APP_ENV", "development"),
+		SamplingRatio: samplingRatio,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initialize telemetry: %w", err)
+	}
+	return shutdown, nil
 }
 
 func (a *App) Run() {
@@ -107,5 +137,16 @@ func (a *App) Run() {
 	}()
 
 	wg.Wait()
+
+	telemetryCtx, cancelTelemetryFunc := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancelTelemetryFunc()
+
+	if err := a.shutdownTelemetry(telemetryCtx); err != nil {
+		slog.Error("telemetry shutdown failed", "error", err)
+	}
+
 	slog.Info("servers stopped cleanly")
 }

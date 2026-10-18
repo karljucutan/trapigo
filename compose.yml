@@ -117,6 +117,8 @@ services:
       - "8081:80"      # Main gateway entrypoint (http://localhost:8081/)
       - "8080:8080"    # Admin Dashboard / API UI (http://localhost:8080)
     environment:
+      - APP_NAME=trapigo-gateway
+      - APP_ENV=development
       - LOG_LEVEL=INFO
       - BASE_URL=http://localhost
       - PORT=80
@@ -129,6 +131,11 @@ services:
       # --- Upstream Timeouts (Trapigo to Backends) ---
       - BACKEND_DIAL_TIMEOUT=5    # Max time to connect to a backend service container
       - BACKEND_TIMEOUT=30        # Max time a backend has to process and return a response
+      # OTEL (OpenTelemetry) configuration
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - TELEMETRY_SAMPLING_RATIO=1.0
+
     # Mount the example/default YAML config into the container and point the app to it explicitly.
     # This lets each deployment override the file with its own routing config by changing the env var or mounting a different file.
     volumes:

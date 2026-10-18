@@ -4,3 +4,22 @@ resources:
   - ../../base
 sortOptions:
   order: fifo
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: trapigo
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: trapigo
+      spec:
+        template:
+          spec:
+            containers:
+              - name: trapigo
+                env:
+                  - name: APP_ENV
+                    value: production

@@ -11,6 +11,8 @@ configMapGenerator:
       - ../../trapigo/configs/trapigo-gateway-kube.yaml
   - name: trapigo-gateway-env
     literals:
+      - APP_NAME=trapigo-gateway
+      - APP_ENV=development
       - LOG_LEVEL=INFO
       - BASE_URL=http://localhost
       - PORT=80
@@ -21,6 +23,7 @@ configMapGenerator:
       - IDLE_TIMEOUT=180
       - BACKEND_DIAL_TIMEOUT=5
       - BACKEND_TIMEOUT=30
+      - TELEMETRY_SAMPLING_RATIO=1.0
   - name: keycloak-env
     literals:
       - KC_DB=postgres
