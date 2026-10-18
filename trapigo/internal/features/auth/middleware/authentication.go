@@ -9,6 +9,8 @@ import (
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/domain"
 	"github.com/karljucutan/trapigo/trapigo/internal/features/auth/infrastructure"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/oauth2"
 )
 
@@ -39,15 +41,24 @@ const (
 func NewAuthenticationMiddleware(cfg AuthenticationMiddlewareConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			claims, accessToken, method, err := authenticateRequest(rw, req, cfg)
+			traceCtx, span := otel.Tracer("trapigo-gateway").Start(req.Context(), "gateway.authentication")
+			claims, accessToken, method, err := authenticateRequest(rw, req.WithContext(traceCtx), cfg)
 			if err != nil {
+				span.SetAttributes(attribute.String("trapigo.policy.outcome", "rejected"))
+				span.End()
 				http.Error(rw, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
-			ctx := context.WithValue(req.Context(), authClaimsKey{}, claims)
-			ctx = context.WithValue(ctx, authAccessTokenKey{}, accessToken)
-			ctx = context.WithValue(ctx, authMethodKey{}, method)
-			next.ServeHTTP(rw, req.WithContext(ctx))
+			span.SetAttributes(
+				attribute.String("trapigo.policy.outcome", "authenticated"),
+				attribute.String("trapigo.authentication.method", string(method)),
+			)
+			span.End()
+
+			authCtx := context.WithValue(req.Context(), authClaimsKey{}, claims)
+			authCtx = context.WithValue(authCtx, authAccessTokenKey{}, accessToken)
+			authCtx = context.WithValue(authCtx, authMethodKey{}, method)
+			next.ServeHTTP(rw, req.WithContext(authCtx))
 		})
 	}
 }

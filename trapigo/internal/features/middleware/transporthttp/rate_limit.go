@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type RateLimitPolicy struct {
@@ -52,20 +54,29 @@ func NewRateLimitPolicy(cfg *config.RateLimit) *RateLimitPolicy {
 // This pattern lets us configure the limiter once, then apply it to any handler.
 func RateLimitMiddleware(policy *RateLimitPolicy) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		if policy == nil || !policy.Enabled || policy.TokenBucket.Capacity <= 0 {
-			return next
-		}
-
-		limiter := &tokenBucketLimiter{
-			buckets:     make(map[string]*tokenBucketState),
-			tokenBucket: policy.TokenBucket,
+		var limiter *tokenBucketLimiter
+		if policy != nil && policy.Enabled && policy.TokenBucket.Capacity > 0 {
+			limiter = &tokenBucketLimiter{
+				buckets:     make(map[string]*tokenBucketState),
+				tokenBucket: policy.TokenBucket,
+			}
 		}
 
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			_, span := otel.Tracer("trapigo-gateway").Start(req.Context(), "gateway.rate_limit")
+			if limiter == nil {
+				span.SetAttributes(attribute.String("trapigo.policy.outcome", "disabled"))
+				span.End()
+				next.ServeHTTP(rw, req)
+				return
+			}
+
 			key := clientKey(req)
 			allowed := limiter.consume(key)
 			state, _ := limiter.buckets[key]
 			if !allowed {
+				span.SetAttributes(attribute.String("trapigo.policy.outcome", "rejected"))
+				span.End()
 				slog.Warn("rate limit exceeded",
 					"client", key,
 					"path", req.URL.Path,
@@ -77,6 +88,9 @@ func RateLimitMiddleware(policy *RateLimitPolicy) func(http.Handler) http.Handle
 				http.Error(rw, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
+
+			span.SetAttributes(attribute.String("trapigo.policy.outcome", "admitted"))
+			span.End()
 
 			slog.Debug("rate limit allowed",
 				"client", key,

@@ -14,6 +14,8 @@ import (
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type routeProxy struct {
@@ -94,6 +96,7 @@ func buildLoadBalancerWithStaticServers(httpCfg config.HTTPConfig) (*domain.Load
 
 func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map[string]*routeProxy, auth *authComponents, originMiddleware *originMiddlewareComponents, csrfMiddleware *csrfMiddlewareComponents, rateLimitCfg *config.RateLimit) http.Handler {
 	proxyHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		_, routeSpan := otel.Tracer("trapigo-gateway").Start(req.Context(), "gateway.route_match")
 		var matchedRoute *domain.Router
 		for _, route := range loadBalancer.Routers {
 			if strings.HasPrefix(req.URL.Path, route.PathPrefix) {
@@ -103,12 +106,25 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 		}
 
 		if matchedRoute == nil {
+			routeSpan.SetAttributes(attribute.String("trapigo.policy.outcome", "not_matched"))
+			routeSpan.End()
 			http.NotFound(rw, req)
 			return
 		}
+		routeSpan.SetAttributes(
+			attribute.String("trapigo.policy.outcome", "matched"),
+			attribute.String("http.route", matchedRoute.PathPrefix),
+			attribute.String("trapigo.service.name", matchedRoute.ServiceName),
+		)
+		routeSpan.End()
 
+		_, backendSpan := otel.Tracer("trapigo-gateway").Start(req.Context(), "gateway.backend_selection")
+		configuredReplicaCount := len(matchedRoute.BackendPool.Backends)
 		backend := matchedRoute.BackendPool.RoundRobinAtomic()
+		backendSpan.SetAttributes(attribute.Int("trapigo.backend.replica_count", configuredReplicaCount))
 		if backend == nil {
+			backendSpan.SetAttributes(attribute.String("trapigo.policy.outcome", "unavailable"))
+			backendSpan.End()
 			slog.Warn("no available backends",
 				"path", req.URL.Path,
 				"service", matchedRoute.ServiceName,
@@ -119,6 +135,8 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 
 		proxy, ok := routeProxies[backend.Id]
 		if !ok || proxy == nil || proxy.proxy == nil {
+			backendSpan.SetAttributes(attribute.String("trapigo.policy.outcome", "proxy_unavailable"))
+			backendSpan.End()
 			slog.Warn("no proxy configured",
 				"backend", backend.Id,
 				"path", req.URL.Path,
@@ -127,6 +145,12 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 			http.Error(rw, "No available backends", http.StatusServiceUnavailable)
 			return
 		}
+
+		backendSpan.SetAttributes(attribute.String("trapigo.policy.outcome", "selected"))
+		if replicaLabel := backendReplicaLabel(matchedRoute.BackendPool, backend); replicaLabel != "" {
+			backendSpan.SetAttributes(attribute.String("trapigo.backend.replica", replicaLabel))
+		}
+		backendSpan.End()
 
 		slog.Info("proxying request",
 			"path", req.URL.Path,
@@ -182,6 +206,18 @@ func buildGatewayHttpHandler(loadBalancer *domain.LoadBalancer, routeProxies map
 		gatewayHandler = csrfMiddleware.middleware(gatewayHandler)
 	}
 	return middleware.LoggingMiddleware(middleware.RateLimitMiddleware(rateLimitPolicy)(gatewayHandler))
+}
+
+func backendReplicaLabel(pool *domain.BackendPool, selected *domain.Backend) string {
+	if pool == nil || selected == nil {
+		return ""
+	}
+	for i, backend := range pool.Backends {
+		if backend == selected {
+			return fmt.Sprintf("replica-%d", i+1)
+		}
+	}
+	return ""
 }
 
 func buildAdminHttpHandler() http.Handler {

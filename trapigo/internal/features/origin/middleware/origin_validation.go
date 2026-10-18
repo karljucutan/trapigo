@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/karljucutan/trapigo/trapigo/internal/features/origin/domain"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type OriginValidationMiddleware struct {
@@ -29,10 +31,16 @@ func NewOriginValidationMiddleware(allowedOrigins *domain.AllowedOrigins) func(h
 			//     return
 			// }
 			origin := r.Header.Get("Origin")
+			_, span := otel.Tracer("trapigo-gateway").Start(r.Context(), "gateway.origin_check")
 			if origin != "" && !allowedOrigins.Validate(origin) {
+				span.SetAttributes(attribute.String("trapigo.policy.outcome", "rejected"))
+				span.End()
 				http.Error(w, "Origin not allowed", http.StatusForbidden)
 				return
 			}
+			span.SetAttributes(attribute.String("trapigo.policy.outcome", "passed"))
+			span.End()
+
 			next.ServeHTTP(w, r)
 		})
 	}
