@@ -19,7 +19,7 @@ type RateLimitPolicy struct {
 
 type TokenBucket struct {
 	Capacity            int
-	RefillRate          int
+	RefillRate          float64
 	RefillIntervalInSec int
 }
 

@@ -100,9 +100,9 @@ type RateLimit struct {
 }
 
 type TokenBucket struct {
-	Capacity            int `yaml:"capacity"`
-	RefillRate          int `yaml:"refill-rate"`
-	RefillIntervalInSec int `yaml:"refill-interval-in-seconds"`
+	Capacity            int     `yaml:"capacity"`
+	RefillRate          float64 `yaml:"refill-rate"`
+	RefillIntervalInSec int     `yaml:"refill-interval-in-seconds"`
 }
 
 func LoadConfig(path string) (*Config, error) {

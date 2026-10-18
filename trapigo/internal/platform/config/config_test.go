@@ -27,7 +27,7 @@ func TestLoadConfig_GatewayConfig(t *testing.T) {
 		t.Fatalf("unexpected capacity: %d", cfg.HTTP.RateLimit.TokenBucket.Capacity)
 	}
 	if cfg.HTTP.RateLimit.TokenBucket.RefillRate != 10 {
-		t.Fatalf("unexpected refill-rate: %d", cfg.HTTP.RateLimit.TokenBucket.RefillRate)
+		t.Fatalf("unexpected refill-rate: %f", cfg.HTTP.RateLimit.TokenBucket.RefillRate)
 	}
 	if cfg.HTTP.RateLimit.TokenBucket.RefillIntervalInSec != 1 {
 		t.Fatalf("unexpected refill-interval-in-seconds: %d", cfg.HTTP.RateLimit.TokenBucket.RefillIntervalInSec)
