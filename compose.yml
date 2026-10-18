@@ -149,8 +149,16 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - DB_DSN=postgres://postgres:postgres@trapigo-services-db:5432/go-order-service?sslmode=disable
-      - APP_ENV=docker
+      - APP_ENV=development
       - LOG_LEVEL=INFO
+      - APP_NAME=go-order-service
+      # OTEL (OpenTelemetry) configuration
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      # Optional standard OTEL resource settings (uncomment to override or add):
+      # - OTEL_SERVICE_NAME=go-order-service
+      # - OTEL_RESOURCE_ATTRIBUTES=team.name=orders
+      - TELEMETRY_SAMPLING_RATIO=1.0
     depends_on:
       trapigo-services-db:
         condition: service_healthy

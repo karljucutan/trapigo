@@ -114,6 +114,16 @@ CREATE TABLE IF NOT EXISTS order_item (
 go run ./cmd/app
 ```
 
+## Observability
+
+The HTTP server exports traces and standard HTTP instrumentation metrics through
+OTLP/HTTP. Configure `APP_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, and
+`OTEL_EXPORTER_OTLP_PROTOCOL` for the deployment. Optional resource attributes
+can be supplied through `OTEL_RESOURCE_ATTRIBUTES`. Each process generates a
+unique `service.instance.id`. On SIGINT or SIGTERM, the service drains HTTP
+requests, flushes telemetry with a separate bounded timeout, then closes the
+database.
+
 ## Test
 
 ```bash

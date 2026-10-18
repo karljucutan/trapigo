@@ -140,11 +140,11 @@ func (a *App) Run() {
 
 	wg.Wait()
 
-	telemetryCtx, cancelTelemetryFunc := context.WithTimeout(
+	telemetryCtx, cancelTelemetry := context.WithTimeout(
 		context.Background(),
 		10*time.Second,
 	)
-	defer cancelTelemetryFunc()
+	defer cancelTelemetry()
 
 	if err := a.shutdownTelemetry(telemetryCtx); err != nil {
 		slog.Error("telemetry shutdown failed", "error", err)

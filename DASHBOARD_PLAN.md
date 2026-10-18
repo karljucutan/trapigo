@@ -1,6 +1,7 @@
 # Dashboard Request Flow Showcase Plan
 
-Status: Phases 2 and 3 infrastructure configured; Go and service instrumentation not started.
+Status: Phases 2 and 3 infrastructure configured; gateway and orders-service
+instrumentation implemented; full-chain validation pending.
 
 For a Phase 3 architecture and YAML walkthrough, see
 [phase3_explanation.md](./phase3_explanation.md).
@@ -31,6 +32,8 @@ destination predicted by frontend round-robin logic.
 - Use OpenTelemetry instrumentation instead of custom timing response payloads.
 - Use Jaeger for distributed traces, Prometheus for aggregate metrics, and
    Grafana for operational dashboards. Keep the custom request-flow UI.
+- Use standard HTTP instrumentation metrics only; do not add custom application
+  counters or histograms. Use traces for per-request policy and replica evidence.
 - Prefer established OSS libraries for visualization. Use React Flow
    (`@xyflow/react`) for graph nodes, handles, edge routing, and viewport behavior;
    do not hand-roll SVG connectors or a graph engine.
@@ -199,9 +202,10 @@ with a regression test. Do not assume this already causes startup failure.
    bounded: no trace IDs, request IDs, usernames, raw URLs, or dynamic order IDs
    as metric labels.
 4. Provision Grafana Prometheus and Jaeger data sources plus an initial gateway
-   dashboard. Use the Collector exporter metric names actually observed, not
-   assumed names. Include traffic, error rates, duration percentiles, rate-limit
-   admissions/rejections, and selected-replica distribution.
+   dashboard. Use the standard HTTP instrumentation and Collector exporter
+   metric names actually observed, not assumed names. Include traffic, error
+   rates, and duration percentiles where supported. Do not require dedicated
+   rate-limit outcome or selected-replica metric panels.
 5. Use bounded local trace retention and 100% trace sampling for the development
    showcase; make production sampling/storage configurable. Keep ingestion and
    query endpoints internal except deliberate local debugging access. Bind
@@ -227,10 +231,10 @@ with a regression test. Do not assume this already causes startup failure.
    matched service/route, and actual selected public replica label. Distinguish
    gateway rejection from upstream 401/429. Span status alone is not a policy
    outcome; mark explicit attributes/events.
-6. Add counters for requests, policy outcomes, and backend selections plus
-   duration histograms as needed alongside supported HTTP instrumentor metrics.
-   Keep low-cardinality labels; exclude tokens, cookies, order bodies, and
-   sensitive headers from both traces and metrics.
+6. Rely on supported standard HTTP instrumentation metrics; do not add custom
+   request, policy-outcome, or backend-selection counters or policy-duration
+   histograms. Keep metric labels low-cardinality; exclude tokens, cookies,
+   order bodies, and sensitive headers from both traces and metrics.
 7. Sanitize trace attributes before returning them to the custom dashboard.
    Do not change round-robin rules or manufacture backend health. Preserve
    normal streaming, proxy cancellation, and response error handling.
@@ -324,8 +328,9 @@ with a regression test. Do not assume this already causes startup failure.
    spans, policy outcomes, and selected replica independently of Jaeger.
 - Trace lookup tests: unauthenticated access, cross-user IDs, expired registry,
    bounded polling, sanitized fields, telemetry outages, and query timeout.
-- Metrics tests: verify scraper targets, exported metric names, counter increments,
-   histogram semantics, and distinct replica series without high-cardinality labels.
+- Metrics tests: verify scraper targets, actual standard HTTP metric names and
+  availability, and bounded labels. Do not require custom counter or histogram
+  increments.
 - Compose validation: Collector receives both signals, Jaeger returns traces,
    Prometheus scrapes successfully, and Grafana provisions both data sources.
 - UI tests: unavailable metadata, failures, expired session, 429 backoff,
@@ -342,8 +347,9 @@ with a regression test. Do not assume this already causes startup failure.
   may share an IP bucket; do not label quotas as per-user.
 - Other traffic can change the selection sequence and consume rate tokens.
 - Do not add simulated traffic, burst generation, health checks, dynamic
-   scaling, order CRUD, or log aggregation infrastructure. Aggregate metrics and
-   distributed tracing are now explicitly in scope.
+   scaling, order CRUD, or log aggregation infrastructure. Standard HTTP
+   instrumentation metrics and distributed tracing are in scope; custom
+   application metrics are deferred.
 - Do not buffer gateway responses or add custom timing headers/trailers merely
    to measure requests; completed OTel spans travel through the telemetry path.
 - Telemetry is eventually available and can be incomplete or sampled out.
