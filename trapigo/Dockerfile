@@ -1,5 +1,5 @@
 # --- Stage 1: Build base & Install Delve ---
-FROM golang:1.26.5-alpine AS dev-base
+FROM golang:1.27.2-alpine AS dev-base
 RUN apk add --no-cache git gcc musl-dev
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 

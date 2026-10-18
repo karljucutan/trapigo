@@ -171,7 +171,7 @@ func TestHandler_DoesNotLeakDatabaseErrors(t *testing.T) {
 	}
 
 	// Parse Problem Details response
-	var problemDetails map[string]interface{}
+	var problemDetails map[string]any
 	if err := json.NewDecoder(res.Body).Decode(&problemDetails); err != nil {
 		t.Fatalf("expected valid JSON response, got error: %v; body=%s", err, res.Body.String())
 	}

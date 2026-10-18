@@ -143,13 +143,13 @@ func TestIntegration_InvalidTokensRejected(t *testing.T) {
 func TestIntegration_ConcurrentRefreshRequests(t *testing.T) {
 	validator, issuer, key := newValidatorForIntegrationTest(t)
 	cookieManager := infrastructure.NewCookieManager(false, http.SameSiteLaxMode, "/")
-	var refreshCalls int64
+	var refreshCalls atomic.Int64
 
 	authn := authmiddleware.NewAuthenticationMiddleware(authmiddleware.AuthenticationMiddlewareConfig{
 		Validator:     validator,
 		CookieManager: cookieManager,
 		RefreshToken: func(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
-			atomic.AddInt64(&refreshCalls, 1)
+			refreshCalls.Add(1)
 			return &oauth2.Token{
 				AccessToken:  buildToken(t, issuer, "trapigo", key, time.Now().Add(5*time.Minute), time.Now().Add(-time.Minute)),
 				RefreshToken: refreshToken,
@@ -171,17 +171,15 @@ func TestIntegration_ConcurrentRefreshRequests(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make(chan int, workers)
 
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range workers {
+		wg.Go(func() {
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/go-orders", nil)
 			req.AddCookie(cookieManager.AccessTokenCookie(expired, time.Minute))
 			req.AddCookie(cookieManager.RefreshTokenCookie("refresh-abc", 30*time.Minute))
 			res := httptest.NewRecorder()
 			api.ServeHTTP(res, req)
 			results <- res.Code
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -192,7 +190,7 @@ func TestIntegration_ConcurrentRefreshRequests(t *testing.T) {
 			t.Fatalf("expected %d for all concurrent requests, got %d", http.StatusOK, status)
 		}
 	}
-	if atomic.LoadInt64(&refreshCalls) == 0 {
+	if refreshCalls.Load() == 0 {
 		t.Fatal("expected refresh callback to be called for concurrent requests")
 	}
 }

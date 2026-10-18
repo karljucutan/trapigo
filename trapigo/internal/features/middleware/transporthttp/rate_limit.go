@@ -40,12 +40,10 @@ func NewRateLimitPolicy(cfg *config.RateLimit) *RateLimitPolicy {
 	}
 
 	return &RateLimitPolicy{
-		Enabled: cfg.Enabled,
-		TokenBucket: TokenBucket{
-			Capacity:            cfg.TokenBucket.Capacity,
-			RefillRate:          cfg.TokenBucket.RefillRate,
-			RefillIntervalInSec: cfg.TokenBucket.RefillIntervalInSec,
-		},
+		Enabled:             cfg.Enabled,
+		Capacity:            cfg.TokenBucket.Capacity,
+		RefillRate:          cfg.TokenBucket.RefillRate,
+		RefillIntervalInSec: cfg.TokenBucket.RefillIntervalInSec,
 	}
 }
 

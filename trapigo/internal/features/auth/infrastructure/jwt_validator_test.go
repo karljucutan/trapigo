@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -94,9 +95,9 @@ func TestJWTValidator_RefreshesJWKSOnUnknownKeyID(t *testing.T) {
 		t.Fatalf("generate new RSA key: %v", err)
 	}
 
-	var calls int64
+	var calls atomic.Int64
 	_, _, serverURL, client := newJWKSValidatorTestServer(t, func(call int64) jwksDocument {
-		atomic.StoreInt64(&calls, call)
+		calls.Store(call)
 		if call == 1 {
 			return jwksDocument{Keys: []jwk{publicJWKFromKey(t, "old-key", &oldKey.PublicKey)}}
 		}
@@ -104,17 +105,17 @@ func TestJWTValidator_RefreshesJWKSOnUnknownKeyID(t *testing.T) {
 	})
 
 	validator := NewJWTValidatorWithJWKSCacheTTL(serverURL, serverURL, "trapigo", time.Hour, client)
-	primeToken := buildValidatorToken(t, serverURL, "trapigo", "old-key", oldKey, time.Now().Add(5*time.Minute), timePtr(time.Now().Add(-time.Minute)))
+	primeToken := buildValidatorToken(t, serverURL, "trapigo", "old-key", oldKey, time.Now().Add(5*time.Minute), new(time.Now().Add(-time.Minute)))
 	if _, err := validator.Validate(context.Background(), primeToken); err != nil {
 		t.Fatalf("prime validation failed: %v", err)
 	}
 
-	rotatedToken := buildValidatorToken(t, serverURL, "trapigo", "new-key", newKey, time.Now().Add(5*time.Minute), timePtr(time.Now().Add(-time.Minute)))
+	rotatedToken := buildValidatorToken(t, serverURL, "trapigo", "new-key", newKey, time.Now().Add(5*time.Minute), new(time.Now().Add(-time.Minute)))
 	if _, err := validator.Validate(context.Background(), rotatedToken); err != nil {
 		t.Fatalf("expected JWKS refresh on unknown kid, got error: %v", err)
 	}
-	if atomic.LoadInt64(&calls) < 2 {
-		t.Fatalf("expected JWKS endpoint to be called again for unknown kid, got %d calls", atomic.LoadInt64(&calls))
+	if calls.Load() < 2 {
+		t.Fatalf("expected JWKS endpoint to be called again for unknown kid, got %d calls", calls.Load())
 	}
 }
 
@@ -126,14 +127,14 @@ func newJWKSValidatorTestServer(t *testing.T, docForCall func(call int64) jwksDo
 		t.Fatalf("generate RSA key: %v", err)
 	}
 	kid := "test-key"
-	var calls int64
+	var calls atomic.Int64
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.URL.Path != "/protocol/openid-connect/certs" {
 			http.NotFound(rw, req)
 			return
 		}
-		call := atomic.AddInt64(&calls, 1)
+		call := calls.Add(1)
 		rw.Header().Set("Content-Type", "application/json")
 		doc := jwksDocument{Keys: []jwk{publicJWKFromKey(t, kid, &privateKey.PublicKey)}}
 		if docForCall != nil {
@@ -191,9 +192,7 @@ func buildValidatorTokenWithExtras(t *testing.T, issuer, clientID, kid string, k
 	if notBefore != nil {
 		claims["nbf"] = notBefore.Unix()
 	}
-	for name, value := range extraClaims {
-		claims[name] = value
-	}
+	maps.Copy(claims, extraClaims)
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = kid
 	str, err := token.SignedString(key)
@@ -214,6 +213,7 @@ func publicJWKFromKey(t *testing.T, kid string, publicKey *rsa.PublicKey) jwk {
 	}
 }
 
+//go:fix inline
 func timePtr(value time.Time) *time.Time {
-	return &value
+	return new(value)
 }

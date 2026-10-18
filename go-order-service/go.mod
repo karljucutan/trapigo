@@ -1,6 +1,6 @@
 module go-order-service
 
-go 1.26.5
+go 1.27.2
 
 require (
 	github.com/jackc/pgx/v5 v5.7.5

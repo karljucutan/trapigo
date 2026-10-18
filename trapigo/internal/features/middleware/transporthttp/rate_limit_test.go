@@ -9,12 +9,10 @@ import (
 
 func TestRateLimitMiddleware_AllowsRequestsWithinCapacity(t *testing.T) {
 	limit := &RateLimitPolicy{
-		Enabled: true,
-		TokenBucket: TokenBucket{
-			Capacity:            2,
-			RefillRate:          1,
-			RefillIntervalInSec: 60,
-		},
+		Enabled:             true,
+		Capacity:            2,
+		RefillRate:          1,
+		RefillIntervalInSec: 60,
 	}
 	handler := RateLimitMiddleware(limit)(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusOK)
@@ -34,12 +32,10 @@ func TestRateLimitMiddleware_AllowsRequestsWithinCapacity(t *testing.T) {
 
 func TestRateLimitMiddleware_RejectsRequestsAfterCapacity(t *testing.T) {
 	limit := &RateLimitPolicy{
-		Enabled: true,
-		TokenBucket: TokenBucket{
-			Capacity:            2,
-			RefillRate:          1,
-			RefillIntervalInSec: 60,
-		},
+		Enabled:             true,
+		Capacity:            2,
+		RefillRate:          1,
+		RefillIntervalInSec: 60,
 	}
 	handler := RateLimitMiddleware(limit)(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusOK)
