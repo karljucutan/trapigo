@@ -15,6 +15,7 @@ import (
 
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/telemetry"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type App struct {
@@ -48,6 +49,7 @@ func CreateApp() (*App, error) {
 	csrfMiddleware := buildCSRFProtectionMiddlewareComponents(&cfg.AllowedOrigins, cfg.Auth.FrontendRedirectURL)
 
 	gatewayHttpHandler := buildGatewayHttpHandler(loadBalancer, routeProxies, auth, originMiddleware, csrfMiddleware, cfg.HTTP.RateLimit)
+	gatewayHttpHandler = otelhttp.NewHandler(gatewayHttpHandler, "gateway")
 	adminHttpHandler := buildAdminHttpHandler()
 
 	return &App{

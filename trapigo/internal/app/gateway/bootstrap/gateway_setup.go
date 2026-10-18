@@ -13,6 +13,7 @@ import (
 	middleware "github.com/karljucutan/trapigo/trapigo/internal/features/middleware/transporthttp"
 	"github.com/karljucutan/trapigo/trapigo/internal/platform/config"
 	configuration "github.com/karljucutan/trapigo/trapigo/pkg"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type routeProxy struct {
@@ -41,6 +42,7 @@ func buildLoadBalancer(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[str
 func buildLoadBalancerWithStaticServers(httpCfg config.HTTPConfig) (*domain.LoadBalancer, map[string]*routeProxy, error) {
 	loadBalancer := domain.NewLoadBalancer()
 	routeProxies := make(map[string]*routeProxy)
+	otelhttpTransport := otelhttp.NewTransport(http.DefaultTransport)
 
 	for routerName, router := range httpCfg.Routers {
 		service, ok := httpCfg.Services[router.Service]
@@ -75,10 +77,14 @@ func buildLoadBalancerWithStaticServers(httpCfg config.HTTPConfig) (*domain.Load
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid upstream URL %q for router %q: %w", server.URL, routerName, err)
 			}
+
 			lbRouter.BackendPool.Add(domain.NewBackend(server.URL, upstreamURL))
+
+			proxy := httputil.NewSingleHostReverseProxy(upstreamURL)
+			proxy.Transport = otelhttpTransport
 			routeProxies[server.URL] = &routeProxy{
 				upstreamURL: server.URL,
-				proxy:       httputil.NewSingleHostReverseProxy(upstreamURL),
+				proxy:       proxy,
 			}
 		}
 	}
