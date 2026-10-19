@@ -1,9 +1,27 @@
-import { Radio } from "lucide-react";
+import { Play, Radio, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequestFlowState } from "@/lib/request-flow";
 import { presentRequestFlow } from "@/lib/request-flow-presentation";
 
-export function DashboardHeader({ state }: { state: RequestFlowState }) {
+export function DashboardHeader({
+  state,
+  onSendRequest,
+  onStartTraffic,
+  onStopTraffic,
+  busy,
+  running,
+  hidden,
+  cooldownSeconds,
+}: {
+  state: RequestFlowState;
+  onSendRequest: () => Promise<unknown>;
+  onStartTraffic: () => void;
+  onStopTraffic: () => void;
+  busy: boolean;
+  running: boolean;
+  hidden: boolean;
+  cooldownSeconds: number;
+}) {
   return (
     <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -15,8 +33,8 @@ export function DashboardHeader({ state }: { state: RequestFlowState }) {
           Gateway dashboard
         </h1>
         <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Inspect the configured request path and service topology.
-          Observability will appear here when a request is connected.
+          Send GET /api/v1/go-orders through Trapigo and inspect its actual
+          gateway policies, selected replica, and stored trace evidence.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -24,15 +42,37 @@ export function DashboardHeader({ state }: { state: RequestFlowState }) {
         <Button
           type="button"
           size="lg"
-          disabled
+          disabled={busy || running || hidden || cooldownSeconds > 0}
+          onClick={onSendRequest}
           aria-describedby="traffic-controls-help"
         >
           <Radio aria-hidden="true" className="size-4" />
           Send request
         </Button>
+        <Button
+          type="button"
+          size="lg"
+          variant="outline"
+          disabled={!running && (busy || hidden || cooldownSeconds > 0)}
+          onClick={running ? onStopTraffic : onStartTraffic}
+          aria-describedby="traffic-controls-help"
+        >
+          {running ? (
+            <Square aria-hidden="true" />
+          ) : (
+            <Play aria-hidden="true" />
+          )}
+          {running ? "Stop traffic" : "Start traffic"}
+        </Button>
+        {cooldownSeconds > 0 && !busy && (
+          <span className="text-xs text-muted-foreground">
+            Next send in {cooldownSeconds}s
+          </span>
+        )}
         <span id="traffic-controls-help" className="sr-only">
-          Traffic controls will be available when request integration is
-          implemented.
+          Requests run one at a time, including trace lookup. Traffic waits at
+          least five seconds between cycles and pauses in hidden tabs. Stop
+          prevents the next request; the current request can finish.
         </span>
       </div>
     </header>

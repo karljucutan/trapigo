@@ -84,11 +84,7 @@ export async function fetchGatewaySession(
   config: AuthConfig,
   request: typeof fetch = fetch,
 ): Promise<{ user: CurrentUser | null; cookies: string[] }> {
-  const cookies = cookieHeader
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie))
-    .join("; ");
+  const cookies = authCookieHeader(cookieHeader);
   const response = await request(
     new URL("/web/auth/me", config.gatewayOrigin),
     {
@@ -126,4 +122,26 @@ export async function fetchGatewaySession(
     user: { subject: body.subject, username: body.username },
     cookies: rotatedCookies,
   };
+}
+
+export function authCookieHeader(cookieHeader: string): string {
+  const allowed = new Set(["web_access_token", "web_refresh_token"]);
+  const cookies = new Map<string, string>();
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const name = part.slice(0, separator).trim();
+    if (!allowed.has(name)) continue;
+    if (cookies.has(name)) throw new Error("Duplicate authentication cookie");
+    cookies.set(name, part.slice(separator + 1).trim());
+  }
+  return [...cookies.entries()]
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+}
+
+export function rotatedAuthCookies(headers: Headers): string[] {
+  return headers
+    .getSetCookie()
+    .filter((cookie) => /^web_(access|refresh)_token=/.test(cookie));
 }

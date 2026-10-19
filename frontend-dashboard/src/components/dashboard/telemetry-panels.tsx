@@ -18,14 +18,21 @@ import {
 } from "@/components/ui/card";
 import type { RequestFlowState } from "@/lib/request-flow";
 import { presentRequestFlow } from "@/lib/request-flow-presentation";
+import type { ShowcaseHistoryEntry } from "@/lib/use-showcase";
 
-export function TelemetryPanels({ state }: { state: RequestFlowState }) {
+export function TelemetryPanels({
+  state,
+  history,
+}: {
+  state: RequestFlowState;
+  history: readonly ShowcaseHistoryEntry[];
+}) {
   return (
     <aside className="flex flex-col gap-5">
       <ConnectionCard state={state} />
       <TimingCard state={state} />
       <ResultCard state={state} />
-      <HistoryCard />
+      <HistoryCard history={history} />
     </aside>
   );
 }
@@ -100,8 +107,8 @@ function ConnectionCard({ state }: { state: RequestFlowState }) {
           </span>
         </div>
         <p className="mt-2.5 text-xs leading-5 text-muted-foreground">
-          This dashboard is showing configured topology only. No application
-          traffic or telemetry is being simulated.
+          {flow.traceMessage}. Traces come from Jaeger after export; they are
+          not live packet tracking. Only gateway and orders spans are measured.
         </p>
       </CardContent>
     </Card>
@@ -110,8 +117,9 @@ function ConnectionCard({ state }: { state: RequestFlowState }) {
 
 function TimingCard({ state }: { state: RequestFlowState }) {
   const flow = presentRequestFlow(state);
-  const total = flow.spans.find((span) => span.label === "Browser request");
+  const total = flow.spans.find((span) => span.label === "Gateway request");
   const service = flow.spans.find((span) => span.label === "Orders service");
+  const proxy = flow.spans.find((span) => span.label === "Gateway to replica");
   return (
     <Card className="border-border/80 shadow-sm">
       <CardHeader className="pb-2">
@@ -126,7 +134,11 @@ function TimingCard({ state }: { state: RequestFlowState }) {
       <CardContent>
         <div className="grid grid-cols-2 gap-2">
           <MetricPlaceholder
-            label="Total request-response"
+            label="Gateway to replica"
+            value={proxy?.duration ?? "Unavailable"}
+          />
+          <MetricPlaceholder
+            label="Gateway request"
             value={total?.duration ?? "Unavailable"}
           />
           <MetricPlaceholder
@@ -173,6 +185,9 @@ function ResultCard({ state }: { state: RequestFlowState }) {
           <ResultRow label="Retry information" value={flow.retry} />
           <ResultRow label="Selected replica" value={flow.selectedReplica} />
           <ResultRow label="Delivery" value={flow.delivery} />
+          {"result" in state && (
+            <ResultRow label="Trace ID" value={state.result.traceId} />
+          )}
           {flow.policies.map((policy) => (
             <ResultRow
               key={policy.policy}
@@ -190,12 +205,18 @@ function ResultRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 text-xs">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-foreground/80">{value}</span>
+      <span className="min-w-0 break-all text-right font-medium text-foreground/80">
+        {value}
+      </span>
     </div>
   );
 }
 
-function HistoryCard() {
+function HistoryCard({
+  history,
+}: {
+  history: readonly ShowcaseHistoryEntry[];
+}) {
   return (
     <Card className="border-border/80 shadow-sm">
       <CardHeader className="pb-2">
@@ -207,21 +228,47 @@ function HistoryCard() {
           Recent requests
         </CardTitle>
         <CardDescription className="text-xs">
-          Bounded history · latest 5
+          Latest 5 · this page only · one entry per business request
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex min-h-20 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/50 px-4 py-4 text-center">
-          <span className="mb-2 flex size-8 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border">
-            <History aria-hidden="true" className="size-4" />
-          </span>
-          <p className="text-xs font-medium text-foreground/80">
-            No requests observed yet
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            History will appear after request integration.
-          </p>
-        </div>
+        {history.length > 0 ? (
+          <ol className="space-y-2">
+            {history.map(({ result, selectedReplica }) => (
+              <li
+                key={result.traceId}
+                className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs"
+              >
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>
+                    {result.kind === "connection-failure"
+                      ? "Connection failed"
+                      : `HTTP ${result.statusCode}`}
+                  </span>
+                  <span>{selectedReplica ?? "Selection not observed"}</span>
+                </div>
+                <p className="mt-1 break-all text-[10px] text-muted-foreground">
+                  {result.traceId}
+                </p>
+                {result.kind === "response-body-failure" && (
+                  <p>Response body incomplete</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="flex min-h-20 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/50 px-4 py-4 text-center">
+            <span className="mb-2 flex size-8 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border">
+              <History aria-hidden="true" className="size-4" />
+            </span>
+            <p className="text-xs font-medium text-foreground/80">
+              No requests observed yet
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Send a request to inspect real results.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -236,6 +283,7 @@ function TimelineLane({
   title: string;
   spans: readonly {
     spanId: string;
+    parentSpanId: string | null;
     label: string;
     duration: string;
     boundary: string;
@@ -262,6 +310,10 @@ function TimelineLane({
               <span className="text-foreground/80">{span.duration}</span>
               <span className="text-[10px] text-muted-foreground">
                 {span.boundary}
+              </span>
+              <span className="w-full break-all font-mono text-[10px] text-muted-foreground">
+                {span.spanId} · parent{" "}
+                {span.parentSpanId ?? "gateway scope root"}
               </span>
             </li>
           ))}

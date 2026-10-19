@@ -138,3 +138,24 @@
     @apply font-sans;
   }
 }
+@keyframes gateway-evidence-flow {
+  from { stroke-dashoffset: 36; }
+  to { stroke-dashoffset: 0; }
+}
+
+.observed-request-edge .react-flow__edge-path {
+  stroke-dasharray: 6 3;
+  animation: gateway-evidence-flow 1s linear 3;
+}
+
+.observed-return-edge .react-flow__edge-path {
+  animation:
+    gateway-evidence-flow 1s linear 2,
+    gateway-evidence-flow 1s linear 2 2s reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .observed-request-edge .react-flow__edge-path {
+    animation: none;
+  }
+}

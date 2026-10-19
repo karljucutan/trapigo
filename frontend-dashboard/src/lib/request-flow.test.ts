@@ -94,6 +94,7 @@ test("rejection, connection failure, and incomplete evidence stay explicit", () 
     result: {
       kind: "connection-failure",
       traceId: id,
+      failure: "connection-failed",
       retry: { attempts: retryAttempts(2), retryAfterMs: null },
     },
     reason: "timed-out",

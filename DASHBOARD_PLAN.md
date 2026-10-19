@@ -26,7 +26,8 @@ destination predicted by frontend round-robin logic.
 - Offer Send Request and Start/Stop Traffic controls. No burst generator.
 - Show rate limiting, authentication, route matching, and load balancing.
 - Show horizontally scaled Go orders replicas and request distribution.
-- Show total request-response time and timings between request boundaries.
+- Show gateway request time, policy timings, proxy round trip, and service
+  processing time. Browser and BFF tracing are out of scope.
 - Preserve the existing dashboard's authentication and design conventions.
 - Save this plan before making application changes.
 - Use OpenTelemetry instrumentation instead of custom timing response payloads.
@@ -45,7 +46,7 @@ Request path:
 Browser -> BFF -> Trapigo -> selected Go orders replica
 
 Telemetry path:
-OTel SDKs -> OTel Collector -- traces --> Jaeger
+Go OTel SDKs -> OTel Collector -- traces --> Jaeger
                                        `-- metrics endpoint <-- Prometheus scrapes
 
 Visualization:
@@ -69,17 +70,16 @@ does not serve as the metrics store. Grafana queries both backends.
 
 ## Complexity
 
-- HTTP instrumentation: relatively straightforward with Go `otelhttp` and
-   supported Node HTTP/fetch instrumentation. Verify Node fetch/Undici support
-   rather than assuming an HTTP-only instrumentor covers fetch.
+- HTTP instrumentation: Go `otelhttp` covers the gateway and orders service.
+   The BFF forwards requests and reads traces without recording its own spans.
 - Gateway policies: small custom OTel spans and attributes, not manual duration
    calculations or header/trailer timing transport.
 - Telemetry infrastructure: moderate configuration work for Compose, the
    Collector, Jaeger storage/query, Prometheus scraping, and Grafana provisioning.
 - Custom UI integration: moderate work for secure trace lookup, asynchronous
    arrivals, span normalization, and the responsive animated visualization.
-- Browser tracing: additional setup to measure the actual browser round trip;
-   Go-only instrumentation cannot cover the BFF or browser boundary.
+- Browser and BFF tracing are deliberately excluded. The visualization focuses
+   on Trapigo API Gateway and its selected orders replica.
 
 Overall this is a moderate multi-service feature. OTel simplifies measurement
 and correlation but does not remove trace retrieval and UI work. The previous
@@ -92,14 +92,13 @@ wall-clock timestamps from different containers to infer network latency.
 
 | Display label | Measurement boundary | Includes |
 | --- | --- | --- |
-| Total request-response | Browser request/interaction span through resolved result | Nested calls, serialization, and client/server overhead |
-| BFF -> Trapigo | Outgoing BFF HTTP span | Gateway processing, downstream work, and transport overhead within the instrumentor's boundary |
+| Gateway request | Gateway HTTP server span | Gateway processing and downstream work; not browser/BFF time |
 | Trapigo -> replica | Outgoing proxy HTTP span | Service processing and transport overhead within the instrumentor's boundary |
 | Gateway policies | Local child spans for each policy | Work performed inside that policy only |
 | Service processing | Orders service HTTP server span | Handler work including database calls; not client network transit |
 
 These durations are nested. Never add them together as if they were sequential
-segments: the browser total already includes the downstream durations.
+segments: the gateway request already includes the downstream durations.
 
 For example, a 30 ms gateway-to-replica round trip with 20 ms measured service
 processing does not prove 10 ms of pure network latency. The remainder can
@@ -239,12 +238,17 @@ with a regression test. Do not assume this already causes startup failure.
    Do not change round-robin rules or manufacture backend health. Preserve
    normal streaming, proxy cancellation, and response error handling.
 
-## Phase 5: BFF, Browser, and Secure Trace Retrieval
+## Phase 5: Fixed Request and Secure Gateway Trace Retrieval
 
-1. Initialize Node OTel before instrumented modules load. Verify TanStack Start
-   server request and outgoing fetch instrumentation; cover unsupported boundaries
-   with explicit OTel spans. Propagate trace context to Trapigo.
-2. Add a fixed `GET /api/v1/go-orders` server-only helper and POST server function.
+1. Keep the browser and BFF uninstrumented. Use the existing Go telemetry
+   pipeline. Generate server-owned W3C correlation context for the fixed orders
+   request so the BFF can retrieve its gateway trace without recording a BFF
+   span. The remote correlation parent is not exported.
+2. Wire the Send Request button to a TanStack server function that calls a fixed,
+   server-only `GET /api/v1/go-orders` helper. The server-function invocation is
+   the browser-to-BFF mechanism; it does not change the upstream HTTP method,
+   which must remain GET. Choose and verify the supported invocation method for
+   the installed TanStack Start version rather than assuming it must be POST.
    Forward only auth cookies and generated trace context, preserve rotated
    cookies, use timeout/no-store/no redirects, and consume the body with a size
    bound without returning order data merely to show the flow.
@@ -257,21 +261,45 @@ with a regression test. Do not assume this already causes startup failure.
 5. Add an authenticated BFF trace-query operation using Jaeger's documented,
    versioned query API, not its unofficial internal UI API. Bound query size,
    timeout, polling attempts, and returned fields.
-6. Authorize trace access independently of knowing its ID. Bind issued showcase
-   traces to the authenticated session/user, including gateway-rejected requests.
-   Use an expiring bounded registry for a single-BFF demo; use a shared store for
-   multiple BFF instances. No unrestricted trace search or client-chosen backend
-   URL. Verify refreshed session identity and avoid cross-user data exposure.
+6. For the single-user local demo, retain only the latest trace in one expiring
+   in-memory record. Reverify login through Trapigo on trace lookup, not each
+   Send Request. Do not fingerprint cookies or maintain BFF session ownership.
+   A new request replaces the previous active trace. Any authenticated user who
+   knows the active ID can read it; this intentionally does not support a shared
+   or public dashboard. Add per-session authorization and suitable storage before
+   supporting concurrent users or multiple BFF replicas. Do not expose unrestricted
+   trace search or accept a client-chosen backend URL.
 7. Normalize spans into the Phase 2 bounded UI contract with parent relationships,
    durations, policy evidence, and public replica labels. Missing/incomplete
    traces remain explicit, not fabricated destinations or zero-duration success.
-8. Use browser OTel request/interaction spans to include the actual browser
-   boundary. Keep trace-query polling and animation outside the request span.
-   Define a same-origin, authenticated, size/rate-bounded telemetry ingress or
-   equivalent verified transport for browser export; do not publicly expose the
-   Collector. Treat browser telemetry as untrusted for authorization and routing.
-9. Ensure trace-query requests and telemetry-ingress traffic do not pollute the
-   showcased business trace or create recursive telemetry/export behavior.
+8. Normalize only gateway and orders spans. Treat the gateway as the root of
+   the displayed scope; absent browser/BFF spans are intentional, not partial
+   evidence. Do not label gateway duration as browser round-trip time.
+9. Keep trace queries separate from the showcased request. No browser telemetry
+   ingress, Node OTel dependencies/preload, or Collector host port is needed.
+
+### Phase 5 implementation and verification status
+
+- Implemented GET server-function invocation and the fixed upstream GET,
+  server-owned trace correlation, single-active-request storage, authenticated
+  Jaeger v3 lookup, and sanitized gateway/orders normalization.
+- Phase 6 now enables Send Request and renders the returned evidence.
+  No orders request is issued on page load.
+- Browser/BFF tracing and telemetry ingress have been removed, along with the
+  preload, direct Node OTel dependencies, and Collector host-port change.
+- Custom TanStack Start global middleware has been removed. Server functions use
+  the framework's normal setup; gateway policies remain Trapigo's responsibility.
+  Jaeger lookup revalidates login through Trapigo and only reads the active demo
+  trace. Cookie fingerprinting and per-session ownership have been removed for
+  the single-user local demo. A new request replaces the previous trace.
+- Live Go server span names are route-based. Authenticated gateway-to-orders
+  delivery and cookie-refresh smoke checks remain pending before Phase 5 sign-off.
+  No Collector configuration change or restart is required for the dashboard.
+- Gateway-only typecheck, Biome, the 11 existing frontend tests, and production
+  build pass. Inline checks cover a complete gateway/orders trace, disconnected
+  partial evidence and fixed transport. A live gateway 401 is
+  retrieved from Jaeger v3 and recognized as complete rejection evidence without
+  requiring browser/BFF spans.
 
 ## Phase 6: Real-Data Dashboard Integration
 
@@ -284,8 +312,8 @@ with a regression test. Do not assume this already causes startup failure.
 3. Show an in-flight state without guessing the destination. On completion,
    animate the observed path, selected replica, and return path. Stop rejected
    flows at the reported stage; distinguish selection from successful delivery.
-4. Display timings derived from the corresponding OTel spans on BFF/gateway and
-   gateway/replica connections, plus total request-response and service processing
+4. Display timings derived from the gateway request, policies, proxy outbound
+   request, and service processing
    durations. Respect the verified boundaries; show unavailable for missing data.
    Add a compact parent/child span timeline for deeper inspection.
 5. Serialize single and continuous requests. Disable overlapping sends, pause
@@ -293,19 +321,44 @@ with a regression test. Do not assume this already causes startup failure.
    results. Stop prevents future sends; an issued request can finish.
 6. Back off on 429 using `Retry-After`; stop on session rejection or connection
    failure. Respect reduced motion. Use no artificial backend delays.
-7. Show bounded recent history and session-local per-replica selection counts.
-   Do not claim these are global gateway metrics.
+7. Retain the latest five results and observed counts for the three configured
+   replica labels in page-local React state. Only the active trace is queried;
+   do not query historical IDs after the next request replaces the BFF record.
+   Counts reset on reload/unmount and are not global gateway metrics.
 8. Reverify the Phase 1 responsive layout and accessibility with real trace data,
    timing labels, history, and error states; prevent overlap and overflow.
 9. Show a waiting-for-trace state after the real response, with bounded retry and
     partial/unavailable results. Count the business request once regardless of
     polling. Grafana and Jaeger UIs remain separate optional debugging views.
 
+### Phase 6 simplifications and behavior
+
+- No browser/BFF tracing, session fingerprinting, multi-user registry, custom
+  startup middleware, or Collector changes. Gateway/orders evidence only.
+- One complete request/lookup cycle at a time; up to ten trace reads separated
+  by 1.5 seconds. Continuous traffic waits at least five seconds between cycles
+  and honors `Retry-After`; this is pacing, not an automatic business retry.
+- Trace reads revalidate login at Trapigo, so auth checks contribute real traffic
+  to the shared gateway IP quota. Hidden tabs pause sends and future lookups.
+- Stop allows the issued cycle to finish; unmount cancels local waits and ignores
+  late responses. No new orders call is issued to retrieve missing traces.
+- Policy timing labels and parent IDs are sanitized from known producers.
+  Evidence highlights are finite and reduced-motion safe. Missing logging spans,
+  replica health, service delivery, and timings are not invented.
+- Keep the original bottom-to-top graph handles and vertical topology. Return
+  evidence animates backward on those same edges, without extra side connectors.
+- Implemented controls, live result states, page-local history/counts, and the
+  gateway-only span inspector. Browser checks against local mock gateway/Jaeger
+  cover delayed arrival, rejection, downstream 401, ten-query limits, partial
+  delivery, outage, expired login, Stop, hidden-tab pause, navigation cleanup,
+  mobile overflow, and reduced motion. These are not an authenticated smoke
+  against the real Compose stack; that remains a Phase 7 handoff prerequisite.
+
 ## Phase 7: Documentation and Handoff
 
 - Document Compose startup, instrumentation env vars, local monitoring URLs,
    retention, sampling, trace availability delay, and metrics semantics.
-- Explain the distinction between custom session-local showcase counts and
+- Explain the distinction between custom page-local showcase counts and
    Grafana's aggregate metrics. Do not equate sampled trace counts with totals.
 - Provide a Grafana dashboard provisioned from actual exported signals and
    document trace navigation/correlation only where configured and verified.
@@ -326,8 +379,9 @@ with a regression test. Do not assume this already causes startup failure.
    cookie allowlists, refresh cookies, and malformed/incomplete trace data.
 - Use in-memory OTel exporters for focused tests; assert span parentage, ended
    spans, policy outcomes, and selected replica independently of Jaeger.
-- Trace lookup tests: unauthenticated access, cross-user IDs, expired registry,
+- Trace lookup tests: unauthenticated access, inactive/expired trace IDs,
    bounded polling, sanitized fields, telemetry outages, and query timeout.
+   Per-user isolation is deliberately excluded from this single-user local demo.
 - Metrics tests: verify scraper targets, actual standard HTTP metric names and
   availability, and bounded labels. Do not require custom counter or histogram
   increments.
@@ -370,7 +424,7 @@ does not change the request or telemetry architecture.
 2. UI data contract and test-only visual fixtures.
 3. Observability infrastructure.
 4. Go gateway and service instrumentation.
-5. BFF/browser instrumentation and protected trace retrieval.
+5. Fixed BFF request forwarding and protected gateway trace retrieval.
 6. Real-data dashboard integration and observed-path animations.
 7. End-to-end verification, documentation, and handoff.
 

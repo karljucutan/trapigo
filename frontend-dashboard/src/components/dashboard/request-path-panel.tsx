@@ -45,11 +45,15 @@ type StageData = {
   variant?: "entry" | "policy" | "routing";
   policy?: PolicyName;
   observation?: string;
+  observed?: boolean;
+  rejected?: boolean;
 };
 
 type ReplicaPoolData = {
   replicas: string[];
   observedSelection: string;
+  deliveredReplica: string | null;
+  counts: Record<string, number>;
 };
 
 type StageFlowNode = Node<StageData, "stage">;
@@ -119,7 +123,13 @@ const nodeTypes = {
   replicaPool: ReplicaPoolNodeCard,
 };
 
-export function RequestPathPanel({ state }: { state: RequestFlowState }) {
+export function RequestPathPanel({
+  state,
+  counts,
+}: {
+  state: RequestFlowState;
+  counts: Record<string, number>;
+}) {
   const flow = presentRequestFlow(state);
   return (
     <section aria-labelledby="flow-heading">
@@ -149,6 +159,8 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
             <div className="h-[1010px] w-full overflow-hidden rounded-b-xl bg-[radial-gradient(var(--border)_0.8px,transparent_0.8px)] [background-size:18px_18px]">
               <ReactFlowProvider>
                 <GatewayFlow
+                  state={state}
+                  counts={counts}
                   policies={flow.policies}
                   selectedReplica={flow.selectedReplica}
                 />
@@ -158,13 +170,18 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-5 py-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-2">
               <span className="size-2 rounded-full bg-primary" />
-              Gateway
+              Observed gateway path
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="size-2 rounded-sm border border-border bg-background" />
               Configured service slot
             </span>
             <span className="ml-auto">Select and drag to pan</span>
+            <span className="w-full">
+              Highlights replay stored evidence, not live traffic. Replica
+              counts are observed selections on this page, not global metrics or
+              health.
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -173,15 +190,51 @@ export function RequestPathPanel({ state }: { state: RequestFlowState }) {
 }
 
 function GatewayFlow({
+  state,
+  counts,
   policies,
   selectedReplica,
 }: {
+  state: RequestFlowState;
+  counts: Record<string, number>;
   policies: ReturnType<typeof presentRequestFlow>["policies"];
   selectedReplica: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const { fitView } = useReactFlow<DashboardFlowNode>();
+  const trace =
+    state.status === "available" || state.status === "partial"
+      ? state.trace
+      : null;
+  const observedStages = stages.map((stage, index) => {
+    if (stage.policy) {
+      return (
+        trace?.policies.some((policy) => policy.policy === stage.policy) ??
+        false
+      );
+    }
+    return (
+      trace?.spans.some((span) =>
+        index === 0
+          ? span.role === "gateway-request"
+          : stage.number === "07"
+            ? span.role === "gateway-proxy"
+            : false,
+      ) ?? false
+    );
+  });
+  const deliveredReplica =
+    trace?.delivery.status === "delivered" ? trace.delivery.replicaId : null;
+  const rejectedStage = stages.findIndex(
+    (stage) =>
+      stage.policy &&
+      trace?.policies.some(
+        (policy) =>
+          policy.policy === stage.policy &&
+          ["rejected", "not-matched", "not-selected"].includes(policy.outcome),
+      ),
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -206,9 +259,15 @@ function GatewayFlow({
     position: { x, y: index === 0 ? 18 : 112 + (index - 1) * 108 },
     data: {
       ...stage,
+      observed: observedStages[index],
+      rejected: rejectedStage === index,
       observation: stage.policy
         ? policies.find((policy) => policy.policy === stage.policy)?.outcome
-        : undefined,
+        : index === 0 && state.status === "in-flight"
+          ? "In flight"
+          : observedStages[index]
+            ? "Observed"
+            : "Not observed",
     },
     style: { width: cardWidth },
     draggable: false,
@@ -220,8 +279,10 @@ function GatewayFlow({
     type: "replicaPool",
     position: { x, y: 900 },
     data: {
-      replicas: ["Replica 01", "Replica 02", "Replica 03"],
+      replicas: ["replica-1", "replica-2", "replica-3"],
       observedSelection: selectedReplica,
+      deliveredReplica,
+      counts,
     },
     style: { width: cardWidth },
     draggable: false,
@@ -229,14 +290,32 @@ function GatewayFlow({
   };
 
   const nodes: DashboardFlowNode[] = [...stageNodes, poolNode];
-  const edges: Edge[] = nodes.slice(0, -1).map((node, index) => ({
-    id: `edge-${node.id}-${nodes[index + 1]?.id}`,
-    source: node.id,
-    target: nodes[index + 1]?.id ?? "",
-    type: "smoothstep",
-    markerEnd: { type: MarkerType.ArrowClosed, color: "var(--border)" },
-    style: { stroke: "var(--border)", strokeWidth: 1.5 },
-  }));
+  const responseObserved =
+    "result" in state &&
+    state.result.kind !== "connection-failure" &&
+    (deliveredReplica !== null || rejectedStage >= 0);
+  const edges: Edge[] = nodes.slice(0, -1).map((node, index) => {
+    const observed =
+      index <= 1
+        ? observedStages[0] && observedStages[2]
+        : index < stages.length - 1
+          ? observedStages[index] && observedStages[index + 1]
+          : deliveredReplica !== null;
+    const color = observed ? "var(--primary)" : "var(--border)";
+    return {
+      id: `edge-${node.id}-${nodes[index + 1]?.id}-${trace?.traceId ?? "idle"}`,
+      source: node.id,
+      target: nodes[index + 1]?.id ?? "",
+      type: "smoothstep",
+      className: observed
+        ? responseObserved
+          ? "observed-request-edge observed-return-edge"
+          : "observed-request-edge"
+        : undefined,
+      markerEnd: { type: MarkerType.ArrowClosed, color },
+      style: { stroke: color, strokeWidth: observed ? 2.5 : 1.5 },
+    };
+  });
 
   useEffect(() => {
     if (canvasWidth > 0) {
@@ -284,7 +363,13 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
     <article
       aria-labelledby={`stage-title-${data.number}`}
       className={`relative flex min-h-[76px] items-center gap-3 rounded-xl border px-3.5 py-3 shadow-sm ${
-        isEntry ? "border-primary/30 bg-primary/10" : "border-border bg-card"
+        data.rejected
+          ? "border-destructive bg-destructive/10"
+          : data.observed
+            ? "border-primary bg-primary/10"
+            : isEntry
+              ? "border-primary/30 bg-primary/10"
+              : "border-border bg-card"
       }`}
     >
       {!isEntry && (
@@ -323,13 +408,13 @@ function StageNodeCard({ data }: NodeProps<StageFlowNode>) {
           {data.description}
         </p>
       </div>
-      {isRouting && (
+      {isRouting && !data.observed && (
         <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
           configured
         </span>
       )}
       {data.observation && (
-        <span className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="ml-auto max-w-20 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {data.observation}
         </span>
       )}
@@ -372,13 +457,24 @@ function ReplicaPoolNodeCard({ data }: NodeProps<ReplicaPoolFlowNode>) {
         {data.replicas.map((replica) => (
           <div
             key={replica}
-            className="rounded-lg border border-border bg-muted/50 px-2 py-2.5 text-center"
+            className={`rounded-lg border px-2 py-2.5 text-center ${
+              data.observedSelection === replica
+                ? "border-primary bg-primary/10"
+                : "border-border bg-muted/50"
+            }`}
           >
             <span className="block text-[11px] font-medium text-foreground">
               {replica}
             </span>
             <span className="mt-1 block text-[10px] text-muted-foreground">
-              configured
+              {data.deliveredReplica === replica
+                ? "Delivered"
+                : data.observedSelection === replica
+                  ? "Selected"
+                  : "Configured"}
+            </span>
+            <span className="mt-1 block text-[10px] text-muted-foreground">
+              {data.counts[replica] ?? 0} selections
             </span>
           </div>
         ))}

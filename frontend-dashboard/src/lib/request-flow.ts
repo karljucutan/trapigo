@@ -34,12 +34,16 @@ function bounded<T, TMax extends number>(
 }
 
 export function traceId(value: string): TraceId {
-  if (!/^[\da-f]{32}$/i.test(value)) throw new RangeError("Invalid trace ID");
+  if (!/^[\da-f]{32}$/i.test(value) || /^0{32}$/i.test(value)) {
+    throw new RangeError("Invalid trace ID");
+  }
   return value.toLowerCase() as TraceId;
 }
 
 export function spanId(value: string): SpanId {
-  if (!/^[\da-f]{16}$/i.test(value)) throw new RangeError("Invalid span ID");
+  if (!/^[\da-f]{16}$/i.test(value) || /^0{16}$/i.test(value)) {
+    throw new RangeError("Invalid span ID");
+  }
   return value.toLowerCase() as SpanId;
 }
 
@@ -90,7 +94,19 @@ export type RequestResult =
       statusCode: HttpStatus;
       retry: RetryInfo;
     }
-  | { kind: "connection-failure"; traceId: TraceId; retry: RetryInfo };
+  | {
+      kind: "response-body-failure";
+      traceId: TraceId;
+      statusCode: HttpStatus;
+      failure: "too-large" | "read-failed" | "timed-out";
+      retry: RetryInfo;
+    }
+  | {
+      kind: "connection-failure";
+      traceId: TraceId;
+      failure: "connection-failed" | "timed-out";
+      retry: RetryInfo;
+    };
 
 export type RequestHistory = Bounded<RequestResult, typeof MAX_REQUEST_HISTORY>;
 
@@ -148,6 +164,7 @@ export type TraceSpan = {
   spanId: SpanId;
   parentSpanId: SpanId | null;
   role: SpanRole;
+  policy?: PolicyName;
   duration: {
     valueMs: SpanDurationMs;
     boundary: MeasurementBoundary;
@@ -192,7 +209,7 @@ export type TraceUnavailableReason =
 
 export type RequestFlowState =
   | { status: "not-connected" }
-  | { status: "in-flight"; traceId: TraceId }
+  | { status: "in-flight"; traceId?: TraceId }
   | { status: "waiting-for-trace"; result: RequestResult }
   | { status: "partial"; result: RequestResult; trace: TraceEvidence }
   | { status: "available"; result: RequestResult; trace: TraceEvidence }

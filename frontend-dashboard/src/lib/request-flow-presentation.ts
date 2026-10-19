@@ -57,17 +57,24 @@ export function presentRequestFlow(state: RequestFlowState) {
         ? "Not connected"
         : state.status === "in-flight"
           ? "Request in flight"
-          : "Connected",
+          : result?.kind === "connection-failure"
+            ? "Gateway unreachable"
+            : "Connected",
     result:
       state.status === "not-connected"
         ? "Not observed"
         : state.status === "in-flight"
           ? "In progress"
           : result?.kind === "connection-failure"
-            ? "Connection failed"
-            : "Response received",
+            ? result.failure === "timed-out"
+              ? "Connection timed out"
+              : "Connection failed"
+            : result?.kind === "response-body-failure"
+              ? "Response body incomplete"
+              : "Response received",
     httpStatus:
-      result?.kind === "http-response"
+      result?.kind === "http-response" ||
+      result?.kind === "response-body-failure"
         ? String(result.statusCode)
         : result
           ? "No HTTP response"
@@ -118,7 +125,7 @@ export function presentRequestFlow(state: RequestFlowState) {
       trace?.spans.map((span) => ({
         spanId: span.spanId,
         parentSpanId: span.parentSpanId,
-        label: spanLabels[span.role],
+        label: span.policy ? policyLabels[span.policy] : spanLabels[span.role],
         duration: span.duration ? `${span.duration.valueMs} ms` : "Unavailable",
         boundary: span.duration?.boundary ?? "Duration unavailable",
       })) ?? [],
