@@ -30,7 +30,9 @@ destination predicted by frontend round-robin logic.
   processing time. Browser and BFF tracing are out of scope.
 - Preserve the existing dashboard's authentication and design conventions.
 - Save this plan before making application changes.
-- Use OpenTelemetry instrumentation instead of custom timing response payloads.
+- Use OpenTelemetry for gateway, policy, proxy, and service span timings. Measure
+  total user-visible response time on the client through the BFF response,
+  without including trace lookup time.
 - Use Jaeger for distributed traces, Prometheus for aggregate metrics, and
    Grafana for operational dashboards. Keep the custom request-flow UI.
 - Use standard HTTP instrumentation metrics only; do not add custom application
@@ -73,7 +75,8 @@ does not serve as the metrics store. Grafana queries both backends.
 - HTTP instrumentation: Go `otelhttp` covers the gateway and orders service.
    The BFF forwards requests and reads traces without recording its own spans.
 - Gateway policies: small custom OTel spans and attributes, not manual duration
-   calculations or header/trailer timing transport.
+   calculations or header/trailer timing transport. The browser separately
+   times the user-triggered request through the BFF response.
 - Telemetry infrastructure: moderate configuration work for Compose, the
    Collector, Jaeger storage/query, Prometheus scraping, and Grafana provisioning.
 - Custom UI integration: moderate work for secure trace lookup, asynchronous
@@ -82,8 +85,8 @@ does not serve as the metrics store. Grafana queries both backends.
    on Trapigo API Gateway and its selected orders replica.
 
 Overall this is a moderate multi-service feature. OTel simplifies measurement
-and correlation but does not remove trace retrieval and UI work. The previous
-custom timer/header/buffering approach is superseded by this architecture.
+and correlation but does not remove trace retrieval and UI work. Client total
+response time is separate from OTel span measurements.
 
 ## What Timings Mean
 
@@ -92,6 +95,7 @@ wall-clock timestamps from different containers to infer network latency.
 
 | Display label | Measurement boundary | Includes |
 | --- | --- | --- |
+| Total response time | Browser starts the BFF request through receiving its result | User-visible request latency including browser/BFF/network overhead; not trace lookup time |
 | Gateway request | Gateway HTTP server span | Gateway processing and downstream work; not browser/BFF time |
 | Trapigo -> replica | Outgoing proxy HTTP span | Service processing and transport overhead within the instrumentor's boundary |
 | Gateway policies | Local child spans for each policy | Work performed inside that policy only |

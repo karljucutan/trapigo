@@ -23,6 +23,7 @@ function DashboardPage() {
           hidden={showcase.hidden}
           cooldownSeconds={showcase.cooldownSeconds}
           onSendRequest={showcase.sendRequest}
+          onSendDirectRequest={showcase.sendDirectRequest}
           onStartTraffic={showcase.startTraffic}
           onStopTraffic={showcase.stopTraffic}
         />
@@ -40,7 +41,11 @@ function DashboardPage() {
         </div>
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,0.85fr)]">
           <RequestPathPanel state={showcase.state} counts={showcase.counts} />
-          <TelemetryPanels state={showcase.state} history={showcase.history} />
+          <TelemetryPanels
+            state={showcase.state}
+            history={showcase.history}
+            totalResponseTimeMs={showcase.totalResponseTimeMs}
+          />
         </div>
         <RequestTimeline state={showcase.state} />
       </div>

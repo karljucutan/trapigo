@@ -1,4 +1,4 @@
-import { Play, Radio, Square } from "lucide-react";
+import { ArrowUpRight, Play, Radio, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequestFlowState } from "@/lib/request-flow";
 import { presentRequestFlow } from "@/lib/request-flow-presentation";
@@ -6,6 +6,7 @@ import { presentRequestFlow } from "@/lib/request-flow-presentation";
 export function DashboardHeader({
   state,
   onSendRequest,
+  onSendDirectRequest,
   onStartTraffic,
   onStopTraffic,
   busy,
@@ -15,6 +16,7 @@ export function DashboardHeader({
 }: {
   state: RequestFlowState;
   onSendRequest: () => Promise<unknown>;
+  onSendDirectRequest: () => Promise<unknown>;
   onStartTraffic: () => void;
   onStopTraffic: () => void;
   busy: boolean;
@@ -39,6 +41,17 @@ export function DashboardHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <ConnectionBadge state={state} />
+        <Button
+          type="button"
+          size="lg"
+          variant="outline"
+          disabled={busy || running || hidden || cooldownSeconds > 0}
+          onClick={onSendDirectRequest}
+          aria-describedby="traffic-controls-help"
+        >
+          <ArrowUpRight aria-hidden="true" className="size-4" />
+          Send request - direct to Trapigo
+        </Button>
         <Button
           type="button"
           size="lg"
@@ -70,9 +83,11 @@ export function DashboardHeader({
           </span>
         )}
         <span id="traffic-controls-help" className="sr-only">
-          Requests run one at a time, including trace lookup. Traffic waits at
-          least five seconds between cycles and pauses in hidden tabs. Stop
-          prevents the next request; the current request can finish.
+          Requests run one at a time, including trace lookup. Direct requests
+          send the browser's auth cookies and require credentialed CORS when the
+          gateway is on a different origin. Traffic waits at least five seconds
+          between cycles and pauses in hidden tabs. Stop prevents the next
+          request; the current request can finish.
         </span>
       </div>
     </header>

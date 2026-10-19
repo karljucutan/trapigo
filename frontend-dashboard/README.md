@@ -60,19 +60,35 @@ expiring, single-use state store.
 ## Dashboard request-flow contract
 
 `src/lib/request-flow.ts` defines bounded request, policy, and trace evidence
-types. Span timings include their measurement boundary; selected replicas and
-successful delivery are separate evidence. Missing evidence is rendered as
-unknown rather than success. The dashboard starts `not-connected`; fixtures
-in `src/lib/request-flow.test.ts` are test-only and do not simulate traffic.
+types. Span timings include their measurement boundary; total client-observed
+response time through the BFF result is reported separately and excludes trace
+lookup. Selected replicas and successful delivery are separate evidence.
+Missing evidence is rendered as unknown rather than success. The dashboard
+starts `not-connected`; fixtures in `src/lib/request-flow.test.ts` are test-only
+and do not simulate traffic.
 
 ## Phase 5 request and trace integration
 
 `src/lib/showcase-request.ts` contains the user-triggered flow for the
 Send Request control. It never runs during page load. It invokes a
 TanStack Start GET server function, which makes exactly one fixed
-`GET /api/v1/go-orders` request to `TRAPIGO_GATEWAY_ORIGIN`. The server
-consumes and discards a bounded response body and returns only the real HTTP
-status, trace ID, and retry information. It never returns orders data.
+`GET /api/v1/go-orders` request to `TRAPIGO_GATEWAY_ORIGIN`. The server consumes and discards a bounded response body and returns the real
+HTTP status, trace ID, and retry information. The browser measures total
+response time through this result; trace polling is excluded. It never returns
+orders data.
+
+The dashboard also has a **Send request - direct to Trapigo** button. It
+fetches `GET /api/v1/go-orders` from the browser, sends the browser's auth
+cookies and a W3C `traceparent`, and measures through response-body consumption.
+Trace registration and lookup happen afterward and are excluded from that
+measurement. `VITE_TRAPIGO_GATEWAY_ORIGIN` selects the browser-reachable gateway
+origin; it defaults to `http://localhost:8081` in development and the dashboard
+origin in production. Cross-origin requests require credentialed CORS support
+at the gateway, including unauthenticated OPTIONS preflight for the
+`traceparent` header and exposure of `Retry-After`. An origin allowlist alone
+does not enable browser CORS. A same-origin reverse-proxy route avoids this
+requirement. Browser-blocked responses are shown as connection failures, not
+as successful HTTP responses.
 
 The BFF creates a trace ID, remembers the latest demo request, and forwards
 only the two gateway auth cookies plus

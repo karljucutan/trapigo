@@ -23,14 +23,16 @@ import type { ShowcaseHistoryEntry } from "@/lib/use-showcase";
 export function TelemetryPanels({
   state,
   history,
+  totalResponseTimeMs,
 }: {
   state: RequestFlowState;
   history: readonly ShowcaseHistoryEntry[];
+  totalResponseTimeMs: number | null;
 }) {
   return (
     <aside className="flex flex-col gap-5">
       <ConnectionCard state={state} />
-      <TimingCard state={state} />
+      <TimingCard state={state} totalResponseTimeMs={totalResponseTimeMs} />
       <ResultCard state={state} />
       <HistoryCard history={history} />
     </aside>
@@ -115,7 +117,13 @@ function ConnectionCard({ state }: { state: RequestFlowState }) {
   );
 }
 
-function TimingCard({ state }: { state: RequestFlowState }) {
+function TimingCard({
+  state,
+  totalResponseTimeMs,
+}: {
+  state: RequestFlowState;
+  totalResponseTimeMs: number | null;
+}) {
   const flow = presentRequestFlow(state);
   const total = flow.spans.find((span) => span.label === "Gateway request");
   const service = flow.spans.find((span) => span.label === "Orders service");
@@ -128,11 +136,21 @@ function TimingCard({ state }: { state: RequestFlowState }) {
           Request timing
         </CardTitle>
         <CardDescription className="text-xs">
-          Measurements require an observed request
+          Client-observed response time; span timings require a trace
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-2">
+          <MetricPlaceholder
+            label="Client-observed response time"
+            value={
+              totalResponseTimeMs === null
+                ? state.status === "in-flight"
+                  ? "In progress"
+                  : "Unavailable"
+                : `${totalResponseTimeMs} ms`
+            }
+          />
           <MetricPlaceholder
             label="Gateway to replica"
             value={proxy?.duration ?? "Unavailable"}
@@ -147,7 +165,9 @@ function TimingCard({ state }: { state: RequestFlowState }) {
           />
         </div>
         <p className="mt-2.5 text-xs text-muted-foreground">
-          {flow.traceMessage}
+          Client-measured through response-body consumption. Direct requests
+          measure browser-to-gateway; standard requests include BFF overhead.
+          Trace lookup is excluded. {flow.traceMessage}
         </p>
       </CardContent>
     </Card>

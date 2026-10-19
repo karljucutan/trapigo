@@ -5,7 +5,10 @@ import {
   type RequestFlowState,
   type RequestResult,
 } from "./request-flow";
-import { runShowcaseRequest } from "./showcase-request";
+import {
+  runDirectShowcaseRequest,
+  runShowcaseRequest,
+} from "./showcase-request";
 
 const TRAFFIC_INTERVAL_MS = 5_000;
 const TRACE_POLL_INTERVAL_MS = 1_500;
@@ -38,6 +41,9 @@ export function useShowcase() {
   const [hidden, setHidden] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const [totalResponseTimeMs, setTotalResponseTimeMs] = useState<number | null>(
+    null,
+  );
   const [history, setHistory] = useState<ShowcaseHistoryEntry[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({
     "replica-1": 0,
@@ -54,7 +60,7 @@ export function useShowcase() {
     setRunning(false);
   }
 
-  async function sendRequest() {
+  async function executeRequest(direct = false) {
     const signal = lifecycle.current?.signal;
     if (
       !signal ||
@@ -68,20 +74,26 @@ export function useShowcase() {
     active.current = true;
     setBusy(true);
     setMessage(null);
+    setTotalResponseTimeMs(null);
     setState({ status: "in-flight" });
     let result: RequestResult | null = null;
     let latest: RequestFlowState | null = null;
     let authenticationRequired = false;
     try {
-      const request = await runShowcaseRequest();
+      const request = direct
+        ? await runDirectShowcaseRequest()
+        : await runShowcaseRequest();
       if (signal.aborted) return;
+      setTotalResponseTimeMs(request.durationMs);
       result = request.result;
       latest = { status: "waiting-for-trace", result };
       setState(latest);
       if (result.kind !== "http-response") {
         stopTraffic();
         setMessage(
-          "Traffic stopped: the gateway connection or response body failed.",
+          direct && result.kind === "connection-failure"
+            ? "The browser could not read the direct gateway response. Check gateway connectivity and credentialed CORS/preflight support; no HTTP status is available."
+            : "Traffic stopped: the gateway connection or response body failed.",
         );
       }
       if (result.kind !== "connection-failure" && result.statusCode === 429) {
@@ -89,7 +101,11 @@ export function useShowcase() {
           Date.now() + (result.retry.retryAfterMs ?? TRAFFIC_INTERVAL_MS);
       }
 
-      for (let attempt = 0; attempt < MAX_TRACE_LOOKUPS; attempt++) {
+      for (
+        let attempt = 0;
+        result.kind !== "connection-failure" && attempt < MAX_TRACE_LOOKUPS;
+        attempt++
+      ) {
         await wait(TRACE_POLL_INTERVAL_MS, signal);
         while (document.hidden) await wait(500, signal);
         const evidence = await request.readTrace();
@@ -133,7 +149,12 @@ export function useShowcase() {
         }
       }
       if (latest.status === "waiting-for-trace") {
-        latest = { status: "unavailable", result, reason: "not-found" };
+        latest = {
+          status: "unavailable",
+          result,
+          reason:
+            result.kind === "connection-failure" ? "query-failed" : "not-found",
+        };
         setState(latest);
       }
       const authenticationOutcome =
@@ -161,7 +182,11 @@ export function useShowcase() {
       setMessage(
         result
           ? "Trace lookup failed. The real request result is preserved; no orders request was retried."
-          : "The BFF request failed. No gateway HTTP result is available.",
+          : direct
+            ? error instanceof Error
+              ? error.message
+              : "The direct browser request failed. No gateway HTTP result is available."
+            : "The BFF request failed. No gateway HTTP result is available.",
       );
       if (result && latest?.status !== "partial") {
         setState({ status: "unavailable", result, reason: "query-failed" });
@@ -203,6 +228,14 @@ export function useShowcase() {
     }
   }
 
+  function sendRequest() {
+    return executeRequest();
+  }
+
+  function sendDirectRequest() {
+    return executeRequest(true);
+  }
+
   function startTraffic() {
     traffic.current = true;
     setRunning(true);
@@ -239,8 +272,10 @@ export function useShowcase() {
     cooldownSeconds,
     message,
     history,
+    totalResponseTimeMs,
     counts,
     sendRequest,
+    sendDirectRequest,
     startTraffic,
     stopTraffic,
   };

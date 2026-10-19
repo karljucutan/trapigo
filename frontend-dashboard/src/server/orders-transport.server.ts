@@ -107,7 +107,11 @@ export async function requestOrders(
         : "connection-failed";
     console.error("Orders request failed before an HTTP response", failure);
     return {
-      result: { kind: "connection-failure", failure, retryAfterMs: null },
+      result: {
+        kind: "connection-failure",
+        failure,
+        retryAfterMs: null,
+      },
       cookies: [],
     };
   }
